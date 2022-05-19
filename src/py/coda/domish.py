@@ -1,5 +1,4 @@
 from typing import NamedTuple, Optional, Union, Iterator, Callable
-from mypy_extensions import VarArg
 
 TAttributes = dict[str, Union[str, int, float, bool]]
 
@@ -9,11 +8,11 @@ TAttributes = dict[str, Union[str, int, float, bool]]
 # A minimal implementation of a DOM-like serializable data structure
 class Node(NamedTuple):
     name: str
-    attributes: Optional[TAttributes] = None
-    children: Optional[list["Node"]] = None
+    attributes: TAttributes
+    children: list["Node"]
 
 
-def asXML(node: Node) -> str:
+def toXML(node: Node) -> str:
     return "".join(iterXML(node))
 
 
@@ -37,7 +36,8 @@ def iterXML(node: Node) -> Iterator[str]:
     else:
         yield f"<{node.name}"
         for k, v in (node.attributes or {}).items():
-            yield f' {k}="{v}"'
+            w = v.replace("&", "&amp;").replace('"', "&quot;").replace("\n", " ")
+            yield f' {k}="{w}"'
         if not node.children:
             yield " />"
         else:
@@ -48,7 +48,7 @@ def iterXML(node: Node) -> Iterator[str]:
 
 
 def node(name: str, attributes: Optional[dict] = None, *children: Node) -> Node:
-    return Node(name, attributes, [_ for _ in children] if children else None)
+    return Node(name, attributes or {}, [_ for _ in children] if children else [])
 
 
 class Factory:
