@@ -1,5 +1,6 @@
 import re
-from typing import Optional, Union, Any
+from typing import Optional, Union, Any, NamedTuple, Iterator
+from enum import Enum
 
 # --
 # # Parsing With Regular Expressions
@@ -132,4 +133,94 @@ assert (
         ),
     )
 ) == {"name": "f", "args": {"0": "A", "1": "B", "2": "C", "3": "D"}}
+
+
+# --
+# ## Structure Parsing
+#
+# This is the adaptation of the [second notebook](https://observablehq.com/d/abab7a46ac6717b1)
+# on parsing with regular expressions. We use a little bit more of Python's
+# typing primitives.
+
+
+class MarkerEvent(Enum):
+    Start = "+"
+    End = "-"
+    Content = "="
+    EOS = "."
+
+
+class Marker(NamedTuple):
+    text: str
+    type: str
+    event: MarkerEvent
+    start: int
+    end: Optional[int] = None
+
+
+class Block(NamedTuple):
+    start: str
+    end: str
+
+
+class Grammar(NamedTuple):
+    sequence: dict[str, str]
+    blocks: dict[str, Block]
+
+
+def marks(text: str, grammar: Union[re.Pattern[str], Grammar]) -> list[Marker]:
+    return [_ for _ in iterMarks(text, grammar)]
+
+
+def iterMarks(grammar: Union[re.Pattern[str], Grammar], text: str) -> Iterator[Marker]:
+    parser: re.Pattern[str] = (
+        grammar if isinstance(grammar, re.Pattern) else compileGrammar(grammar)
+    )
+    offset: int = 0
+    # We iterate on the input `text` using the markers regular expression.
+    for matched in parser.finditer(text):
+        # Wet the first non empty named group that we can find. If it
+        # starts with `STA_` it's a start block, if it starts with `END_` it's an
+        # end block.
+        if offset != (start := matched.start()):
+            yield (
+                Marker(text[offset:start], "#text", MarkerEvent.Content, offset, start)
+            )
+        for k, m in matched.groupdict().items():
+            if m is None:
+                continue
+            mark: str = k
+            if k.startswith("STA_"):
+                event = MarkerEvent.Start
+            elif k.startswith("END_"):
+                event = MarkerEvent.End
+            else:
+                event = MarkerEvent.Content
+            yield Marker(m, mark, event, start, start + len(m))
+            # We've found a match, so we can break the loop
+            break
+        offset = matched.end()
+    yield Marker(text[offset:], "#eos", MarkerEvent.EOS, offset, len(text))
+
+
+def compileGrammar(grammar: Grammar) -> re.Pattern[str]:
+    """Returns a regular expression that corresponds to the compilation of the
+    given grammar."""
+    res: list[str] = [capture(v, k) for k, v in grammar.sequence.items()]
+    for k, block in grammar.blocks.items():
+        res.append(capture(block.start, f"STA_{k}"))
+        res.append(capture(block.end, f"END_{k}"))
+    return re.compile("|".join(res), re.MULTILINE)
+
+
+# print(
+#     compileGrammar(
+#         Grammar({"statement": text(";")}, {"block": Block(text("{"), text("}"))})
+#     )
+# )
+
+# --
+# ## Structure Querying
+
+
 # EOF
