@@ -151,8 +151,8 @@ class MarkerEvent(Enum):
 
 
 class Marker(NamedTuple):
-    text: str
     type: str
+    text: str
     event: MarkerEvent
     start: int
     end: Optional[int] = None
@@ -163,19 +163,17 @@ class Block(NamedTuple):
     end: str
 
 
-class Grammar(NamedTuple):
+class Marks(NamedTuple):
     sequence: dict[str, str]
     blocks: dict[str, Block]
 
 
-def marks(text: str, grammar: Union[re.Pattern[str], Grammar]) -> list[Marker]:
-    return [_ for _ in iterMarks(text, grammar)]
+def marks(marks: Union[re.Pattern[str], Marks], text) -> list[Marker]:
+    return [_ for _ in iterMarks(marks, text)]
 
 
-def iterMarks(grammar: Union[re.Pattern[str], Grammar], text: str) -> Iterator[Marker]:
-    parser: re.Pattern[str] = (
-        grammar if isinstance(grammar, re.Pattern) else compileGrammar(grammar)
-    )
+def iterMarks(marks: Union[re.Pattern[str], Marks], text: str) -> Iterator[Marker]:
+    parser: re.Pattern[str] = marks if isinstance(marks, re.Pattern) else compile(marks)
     offset: int = 0
     # We iterate on the input `text` using the markers regular expression.
     for matched in parser.finditer(text):
@@ -184,7 +182,7 @@ def iterMarks(grammar: Union[re.Pattern[str], Grammar], text: str) -> Iterator[M
         # end block.
         if offset != (start := matched.start()):
             yield (
-                Marker(text[offset:start], "#text", MarkerEvent.Content, offset, start)
+                Marker("#text", text[offset:start], MarkerEvent.Content, offset, start)
             )
         for k, m in matched.groupdict().items():
             if m is None:
@@ -196,26 +194,26 @@ def iterMarks(grammar: Union[re.Pattern[str], Grammar], text: str) -> Iterator[M
                 event = MarkerEvent.End
             else:
                 event = MarkerEvent.Content
-            yield Marker(m, mark, event, start, start + len(m))
+            yield Marker(mark, m, event, start, start + len(m))
             # We've found a match, so we can break the loop
             break
         offset = matched.end()
-    yield Marker(text[offset:], "#eos", MarkerEvent.EOS, offset, len(text))
+    yield Marker("#eos", text[offset:], MarkerEvent.EOS, offset, len(text))
 
 
-def compileGrammar(grammar: Grammar) -> re.Pattern[str]:
+def compile(marks: Marks) -> re.Pattern[str]:
     """Returns a regular expression that corresponds to the compilation of the
     given grammar."""
-    res: list[str] = [capture(v, k) for k, v in grammar.sequence.items()]
-    for k, block in grammar.blocks.items():
+    res: list[str] = [capture(v, k) for k, v in marks.sequence.items()]
+    for k, block in marks.blocks.items():
         res.append(capture(block.start, f"STA_{k}"))
         res.append(capture(block.end, f"END_{k}"))
     return re.compile("|".join(res), re.MULTILINE)
 
 
 # print(
-#     compileGrammar(
-#         Grammar({"statement": text(";")}, {"block": Block(text("{"), text("}"))})
+#     compile(
+#         Marks({"statement": text(";")}, {"block": Block(text("{"), text("}"))})
 #     )
 # )
 
