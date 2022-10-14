@@ -12,10 +12,7 @@ Line 2
 Line 3
 """
 
-# with grammar():
-# BlockStart = atom("")
-# Comment = atom("")
-# Block =
+
 
 g = compile(
     Marks(
