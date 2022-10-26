@@ -1,4 +1,5 @@
 appenv_declare $(basename $APPENV_DIR)
 appenv_prepend PYTHONPATH $APPENV_DIR/src/py
+appenv_prepend PYTHONPATH $APPENV_DIR/research
 appenv_prepend PATH $APPENV_DIR/bin
 # EOF

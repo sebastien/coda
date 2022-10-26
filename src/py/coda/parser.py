@@ -1,4 +1,4 @@
-from .reparser import Grammar, Marker, marks
+from .reparser import Marks, Marker, marks
 from .domish import node, toXML
 from typing import NamedTuple, Optional
 from enum import Enum
@@ -74,7 +74,7 @@ def matchSteps(
     return matched
 
 
-python = Grammar(
+python = Marks(
     {
         "commentStart": r"#\s*\-\-\s*\n",
         "comment": r"#(?P<text>[^\n]*)\n",

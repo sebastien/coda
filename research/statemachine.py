@@ -1,4 +1,4 @@
-from typing import Optional, Union, Callable, Iterator
+from typing import Optional, Union, Callable, Iterable, Iterator
 from enum import Enum
 from dataclasses import dataclass
 
@@ -31,11 +31,11 @@ class Transition:
     # state: Optional[Callable[[TAtom, TState, TState], None]] = None
 
 
-StateMachineEvent = Union["Completion"]
+StateMachineEvent = Union["CompletionEvent"]
 
 
 @dataclass
-class Completion:
+class CompletionEvent:
     machine: "StateMachine"
     start: int
     end: int
@@ -52,7 +52,7 @@ class StateMachine:
     def reset(self, offset: int = 0):
         self.state = 0
         self.start = None
-        self.offset: int = offset
+        self.offset = offset
         self.status = Status.Start
 
     def process(self, atoms: TAtom) -> Iterator[StateMachineEvent]:
@@ -73,7 +73,7 @@ class StateMachine:
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
-                    yield Completion(self, self.start, self.offset)
+                    yield CompletionEvent(self, self.start, self.offset)
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
@@ -81,7 +81,7 @@ class StateMachine:
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
-                    yield Completion(self, self.start, self.offset)
+                    yield CompletionEvent(self, self.start, self.offset)
             self.start = None
             self.state = 0
         if increment:
@@ -127,6 +127,17 @@ comments = StateMachine(
 )
 
 
+def mux_all(
+    stream: Iterable[TAtom], *machines: StateMachine
+) -> Iterator[StateMachineEvent]:
+    """A simple combinator to iterate over streams"""
+    for atom in stream:
+        for machine in machines:
+            yield from machine.feed(atom)
+
+
 stream = ["block", "comment", "comment", "block", "comment", "line", "line"]
-for match in comments.process(stream):
+for match in mux_all(stream, blocks, comments):
     print(match)
+
+# EOF
