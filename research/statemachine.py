@@ -26,7 +26,7 @@ class Status(Enum):
 @dataclass
 class Transition:
     target: TState
-    status: Optional[Status] = None
+    status: Optional[Status]
     effect: Optional[Callable[[TAtom, TState, TState], None]] = None
     # The transition could accumulate state
     # state: Optional[Callable[[TAtom, TState, TState], None]] = None
@@ -71,7 +71,7 @@ class StateMachine:
         t = self.match(atom)
         if t:
             previous = self.state
-            if t.status is Status.Start:
+            if t.status is Status.Start or self.start is None:
                 self.start = self.offset
             self.state = t.target
             if t.status is Status.End:
@@ -85,10 +85,9 @@ class StateMachine:
                     yield from self.feed(atom, False)
         else:
             if self.status is Status.Complete:
-                if self.start is None:
-                    raise RuntimeError(f"Transition completed with no start: {t}")
-                else:
-                    yield CompletionEvent(self, self.start, self.offset)
+                yield CompletionEvent(
+                    self, self.offset if self.start is None else self.start, self.offset
+                )
             self.start = None
             self.state = 0
         if increment:

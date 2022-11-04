@@ -41,13 +41,19 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
                 # --
                 # If it's a single match, so when we match this step, we go
                 res[j] = {
-                    name: Transition(0, Status.End) if is_last else Transition(j + 1)
+                    name: Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End)
                 }
                 j += 1
             case "?":
                 res[j] = {
-                    name: Transition(0, Status.End) if is_last else Transition(j + 1),
-                    "*": Transition(0, Status.End) if is_last else Transition(j + 1),
+                    name: Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End),
+                    "*": Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End),
                 }
                 j += 1
             case "+":
@@ -59,22 +65,28 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
                 res[j + 1] = {
                     name: Transition(0, Status.Complete)
                     if is_last
-                    else Transition(j + 1),
-                    "*": Transition(0, Status.End) if is_last else Transition(j + 1),
+                    else Transition(j + 1, Status.Complete),
+                    "*": Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End),
                 }
                 j += 2
             case "*":
                 # We start with a transition that matches the `name`
                 res[j] = {
                     name: Transition(j + 1, Status.Complete),
-                    "*": Transition(0, Status.End) if is_last else Transition(j + 1),
+                    "*": Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End),
                 }
                 # Then the next step can match `name` again, or end then.
                 res[j + 1] = {
                     name: Transition(j, Status.Complete)
                     if is_last
-                    else Transition(j + 1),
-                    "*": Transition(0, Status.End) if is_last else Transition(j + 1),
+                    else Transition(j + 1, Status.Complete),
+                    "*": Transition(0, Status.End)
+                    if is_last
+                    else Transition(j + 1, Status.End),
                 }
                 j += 2
         i += 1
@@ -85,7 +97,24 @@ print("=== TEST seq: defining a sequence of transitions")
 res = seq("commentStart", "commentLine+")
 print(res)
 machine = StateMachine(res, name="Comments")
-print(machine)
+stream = [
+    "commentStart",
+    "commentLine",
+    "commentLine",
+    "code",
+    "commentStart",
+    "commentLine",
+]
+expected = [
+    ("Comment", 0, 3),
+    ("Comment", 4, 5),
+]
+for atom in stream:
+    print(
+        f"--- Feeding: {atom} to machine status={machine.status} state={machine.state} offset={machine.offset}"
+    )
+    for match in machine.feed(atom):
+        print(f"... --> {match}")
 print("--- OK")
 # def grammar(rules: dict[str, dict[str, Transition]]):
 #     return None
