@@ -12,6 +12,7 @@ TState = Union[int]
 
 class Status(Enum):
     Ready = 0
+    # What's he start state for?
     Start = 1
     Incomplete = 2
     # A complete status means we can produce an output, but could
@@ -42,12 +43,18 @@ class CompletionEvent:
 
 
 class StateMachine:
-    def __init__(self, transitions: dict[TState, dict[TAtom, Transition]]):
+    def __init__(
+        self,
+        transitions: dict[TState, dict[TAtom, Transition]],
+        *,
+        name: Optional[str] = None,
+    ):
         self.transitions: dict[TState, dict[TAtom, Transition]] = transitions
         self.state: TState = 0
         self.start: Optional[int] = None
         self.offset: int = 0
         self.status: Status = Status.Ready
+        self.name: Optional[str] = name
 
     def reset(self, offset: int = 0):
         self.state = 0
@@ -97,12 +104,26 @@ class StateMachine:
             # That's the end
             return None
 
+    def __repr__(self):
+        return f"StateMachine(name={self.name},status={self.status},start={self.start},offset={self.offset})"
+
+
+def mux_all(
+    stream: Iterable[TAtom], machines: list[StateMachine]
+) -> Iterator[StateMachineEvent]:
+    """A simple combinator to iterate over streams"""
+    for atom in stream:
+        for machine in machines:
+            yield from machine.feed(atom)
+
 
 # def seq( *atoms ):
 #     for i,atom in enumerate(atoms):
 #         yield i, atom
 
 
+# --
+# We define a state machine to recognise blocks based on a stream of tokens.
 blocks = StateMachine(
     {
         0: {
@@ -111,9 +132,12 @@ blocks = StateMachine(
         1: {"comment": Transition(2, Status.Complete)},
         # TODO: we need to indicate the end state
         2: {"comment": Transition(2, Status.Complete), "*": Transition(0, Status.End)},
-    }
+    },
+    name="Block",
 )
 
+# --
+# We define a state machine to recognise comments, based on a stream of tokens.
 comments = StateMachine(
     {
         0: {
@@ -123,21 +147,17 @@ comments = StateMachine(
             "comment": Transition(1, Status.Complete),
             "*": Transition(0, Status.End),
         },
-    }
+    },
+    name="Comment",
 )
 
 
-def mux_all(
-    stream: Iterable[TAtom], *machines: StateMachine
-) -> Iterator[StateMachineEvent]:
-    """A simple combinator to iterate over streams"""
-    for atom in stream:
-        for machine in machines:
-            yield from machine.feed(atom)
-
-
-stream = ["block", "comment", "comment", "block", "comment", "line", "line"]
-for match in mux_all(stream, blocks, comments):
-    print(match)
-
+if __name__ == "__main__":
+    print("=== TEST Parsing a stream of tokens with state machine")
+    stream = ["block", "comment", "comment", "block", "comment", "line", "line"]
+    expected = ["Block", "Comment", "Block", "Comment"]
+    for i, match in enumerate(mux_all(stream, [blocks, comments])):
+        print(f"--- match={match.machine.name} expected={expected[i]}")
+        assert expected[i] == match.machine.name
+    print("EOK")
 # EOF
