@@ -8,6 +8,7 @@ from dataclasses import dataclass
 
 TAtom = Union[str]
 TState = Union[int]
+TMachine = dict[int, dict[str, "Transition"]]
 
 
 class Status(Enum):
@@ -60,10 +61,25 @@ class StateMachine:
         self.offset = offset
         self.status = Status.Start
 
-    def process(self, atoms: TAtom) -> Iterator[StateMachineEvent]:
+    def process(self, atoms: Iterable[TAtom]) -> Iterator[StateMachineEvent]:
+        """Processes the stream"""
         for atom in atoms:
             for event in self.feed(atom):
                 yield event
+        if end := self.peek():
+            yield end
+
+    def peek(self) -> Optional[StateMachineEvent]:
+        """Peeks into the state machine, returning a state machine event
+        if one can be created out of the current state."""
+        if (
+            self.start is not None
+            and (status := self.status.value) >= Status.Partial.value
+            and status < Status.Fail.value
+        ):
+            return CompletionEvent(self, self.start, self.offset)
+        else:
+            return None
 
     def feed(self, atom: TAtom, increment: bool = True) -> Iterator[StateMachineEvent]:
         t = self.match(atom)
@@ -72,6 +88,7 @@ class StateMachine:
             if t.status.value > Status.Ready.value and self.start is None:
                 self.start = self.offset
             self.state = t.target
+            self.status = t.status
             if t.status is Status.End:
                 # In case we complete a match, we fire a completion
                 # event and then try to match again.
@@ -83,6 +100,8 @@ class StateMachine:
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
+            # If there is no match and the status is complete, we yield a
+            # completion event.
             if self.status is Status.Complete:
                 yield CompletionEvent(
                     self, self.offset if self.start is None else self.start, self.offset
