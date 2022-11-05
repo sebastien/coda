@@ -11,22 +11,20 @@ TState = Union[int]
 
 
 class Status(Enum):
-    Ready = 0
-    # What's he start state for?
-    Start = 1
-    Incomplete = 2
-    # A complete status means we can produce an output, but could
-    # also add to it.
-    Complete = 3
+    Start = 0  # The machine is in start position
+    Ready = 1  # The machine is ready, but hasn't matched anything yet
+    Incomplete = 2  #  Cannot form a match yet
+    Partial = 3  # Matches form a partial unit
+    Complete = 4  # Matches form a complete unit
     # Once end reaches, the only transition out is back to start
-    End = 4
-    Fail = 5
+    End = 5
+    Fail = 6
 
 
 @dataclass
 class Transition:
     target: TState
-    status: Optional[Status]
+    status: Status
     effect: Optional[Callable[[TAtom, TState, TState], None]] = None
     # The transition could accumulate state
     # state: Optional[Callable[[TAtom, TState, TState], None]] = None
@@ -53,7 +51,7 @@ class StateMachine:
         self.state: TState = 0
         self.start: Optional[int] = None
         self.offset: int = 0
-        self.status: Status = Status.Ready
+        self.status: Status = Status.Start
         self.name: Optional[str] = name
 
     def reset(self, offset: int = 0):
@@ -71,7 +69,7 @@ class StateMachine:
         t = self.match(atom)
         if t:
             previous = self.state
-            if t.status is Status.Start or self.start is None:
+            if t.status.value > Status.Ready.value and self.start is None:
                 self.start = self.offset
             self.state = t.target
             if t.status is Status.End:
@@ -81,6 +79,7 @@ class StateMachine:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
                     yield CompletionEvent(self, self.start, self.offset)
+                    self.start = None
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
@@ -94,6 +93,8 @@ class StateMachine:
             self.offset += 1
 
     def match(self, atom: TAtom) -> Optional[Transition]:
+        """Returns the first transition in the current state that matches
+        the given atom."""
         t = self.transitions[self.state]
         if atom in t:
             return t[atom]
@@ -116,17 +117,12 @@ def mux_all(
             yield from machine.feed(atom)
 
 
-# def seq( *atoms ):
-#     for i,atom in enumerate(atoms):
-#         yield i, atom
-
-
 # --
 # We define a state machine to recognise blocks based on a stream of tokens.
 blocks = StateMachine(
     {
         0: {
-            "block": Transition(1, Status.Start),
+            "block": Transition(1, Status.Incomplete),
         },
         1: {"comment": Transition(2, Status.Complete)},
         # TODO: we need to indicate the end state
@@ -140,7 +136,7 @@ blocks = StateMachine(
 comments = StateMachine(
     {
         0: {
-            "comment": Transition(1, Status.Start),
+            "comment": Transition(1, Status.Incomplete),
         },
         1: {
             "comment": Transition(1, Status.Complete),
@@ -150,13 +146,56 @@ comments = StateMachine(
     name="Comment",
 )
 
+# --
+# Next level, we define a machine that recongnises continuous sequences.
+# For instance, we can take one that recognises `A+` and another that recognises
+# `B+`.
+aabb = StateMachine(
+    {
+        0: {
+            "A": Transition(10, Status.Incomplete),
+            "B": Transition(20, Status.Incomplete),
+            "*": Transition(0, Status.Ready),
+        },
+        10: {
+            "A": Transition(10, Status.Complete),
+            "*": Transition(0, Status.End),
+        },
+        20: {
+            "B": Transition(20, Status.Complete),
+            "*": Transition(0, Status.End),
+        },
+    },
+    name="AABB",
+)
 
 if __name__ == "__main__":
     print("=== TEST Parsing a stream of tokens with state machine")
     stream = ["block", "comment", "comment", "block", "comment", "line", "line"]
-    expected = ["Block", "Comment", "Block", "Comment"]
+    output = ["Block", "Comment", "Block", "Comment"]
     for i, match in enumerate(mux_all(stream, [blocks, comments])):
-        print(f"--- match={match.machine.name} expected={expected[i]}")
-        assert expected[i] == match.machine.name
+        actual = match.machine.name
+        expected = output[i]
+        print(
+            f"... {i:02d} OK  {actual}"
+            if actual == expected
+            else f"... {i:02d} ERR {actual} != {expected}"
+        )
+        assert expected == actual
+    print("--- OK")
+
+    print("=== TEST aabb: Using a machine to match multiple sequences")
+    stream = "AA AAAA BB BBBB CCCC AA BBBBB".split()
+    output = [_ for _ in stream if _[0] in "AB"]
+    for i, match in enumerate(aabb.process(text := " ".join(stream))):
+        actual = text[match.start : match.end]
+        expected = output[i]
+        print(
+            f"... {i:02d} OK  {match.start:02d}:{match.end:02d}='{text[match.start : match.end]}'"
+            if actual == expected
+            else f"... {i:02d} ERR {match.start:02d}:{match.end:02d}='{text[match.start : match.end]}' != '{expected}'"
+        )
+        assert expected == actual
+    print("--- OK")
     print("EOK")
 # EOF

@@ -7,6 +7,10 @@ from typing import Optional
 # The next step after our `statemachine` notebook is to integrate the
 # statemachines with our regular expression based parser.
 
+# References:
+# - https://swtch.com/~rsc/regexp/regexp1.html
+# - https://piumarta.com/software/peg/
+
 
 def seq(*matches: str) -> dict[int, dict[str, Transition]]:
     """Takes a list of token names suffixed by a cardinality `[?+*]` and
@@ -114,7 +118,7 @@ for atom in stream:
         f"--- Feeding: {atom} to machine status={machine.status} state={machine.state} offset={machine.offset}"
     )
     for match in machine.feed(atom):
-        print(f"... --> {match}")
+        print(f"... --> {stream[match.start:match.end+1]} = {match}")
 print("--- OK")
 # def grammar(rules: dict[str, dict[str, Transition]]):
 #     return None
