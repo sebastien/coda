@@ -4,11 +4,10 @@
 # This is the simplest implementation of the coda block format. Any text within a block
 # starting with `<spaces>#--\n` and with next lines starting with `<spaces>#` will
 # be a coda block.
-from typing import Iterator, TypeVar, NamedTuple, Optional, cast
+from typing import Iterator, TypeVar, NamedTuple, Optional
 import re
 
 T = TypeVar("T")
-Sentinel = object()
 
 
 CODA_START = re.compile(r"^(?P<space>[ \t]*)#[ \t]?--$")
