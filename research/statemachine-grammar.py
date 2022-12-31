@@ -1,6 +1,6 @@
 from coda.reparser import Marks, marks
 from pathlib import Path
-from statemachine import StateMachine, Transition, Status, TMachine
+from statemachine import StateMachine, Transition, Status, TMachine, TAtom
 from typing import Optional
 
 # --
@@ -111,7 +111,7 @@ def remap(m: TMachine, offset: int = 10) -> TMachine:
     return {
         remapped[s]: (
             {
-                k: Transition(remapped[_.target], _.status, _.effect)
+                k: Transition(remapped[_.target], _.status, _.effect, _.event)
                 for k, _ in t.items()
             }
         )
@@ -119,9 +119,50 @@ def remap(m: TMachine, offset: int = 10) -> TMachine:
     }
 
 
-def sor(sa: TMachine, sb: TMachine) -> TMachine:
-    """Combines the two machines so that `sa` matches OR `sb` matches."""
-    return remap(sa) | remap(sa, len(sa)) | {0: sb[0] | sa[0]}
+# --
+# Leaving this form here, as it's an elegant simple version, and the lack
+# of reduce in Python makes it harder to scale nicely to this elegant format.
+# ```
+# def sor(sa: TMachine, sb: TMachine) -> TMachine:
+#     """Combines the two machines so that `sa` matches OR `sb` matches."""
+#     return remap(sa) | remap(sa, len(sa)) | {0: sb[0] | sa[0]}
+# ```
+
+
+def combine(*machines: TMachine) -> TMachine:
+    """Combines the given machines into one"""
+    count: int = 1
+    remapped: list[TMachine] = []
+    for machine in machines:
+        remapped.append(remap(machine, count))
+        count += len(machine)
+    res: TMachine = {}
+    start: dict[TAtom, Transition] = {}
+    for machine in remapped:
+        res |= machine
+        start |= machine[0]
+    return res | {0: start}
+
+
+def makes(machine: TMachine, event: str) -> TMachine:
+    """Returns a derivation of `machine` with any *End* transition triggering
+    the `event`."""
+    return {
+        state: {
+            atom: Transition(t.target, t.status, t.effect, event)
+            if t.status is Status.End
+            else t
+            for atom, t in transitions.items()
+        }
+        for state, transitions in machine.items()
+    }
+    return machine
+
+
+def grammar(rules: dict[str, TMachine]) -> TMachine:
+    """Combines all the rules in the given machines to produce the event
+    denoted by the key upon succes."""
+    return combine(*(makes(machine, event) for event, machine in rules.items()))
 
 
 if __name__ == "__main__":
@@ -129,8 +170,7 @@ if __name__ == "__main__":
     res = seq("commentStart", "commentLine+")
     # NOTE: remap and sor should be equivalent
     # res = remap(res)
-    # res = sor(res, res)
-    print(remap(res))
+    # res = combine(res, res)
     machine = StateMachine(res, name="Comments")
     stream = [
         "commentStart",
@@ -151,32 +191,40 @@ if __name__ == "__main__":
     if m := machine.peek():
         print(f"... OUT {stream[m.start:m.end+1]}")
     print("--- OK")
-    # def grammar(rules: dict[str, dict[str, Transition]]):
-    #     return None
-    #
-    #
-    # # --
-    # # We define the tokens we care about
-    # python_tokens: Marks = Marks(
-    #     {
-    #         "commentStart": r"#\s*\-\-\s*\n",
-    #         "comment": r"#(?P<text>[^\n]*)\n",
-    #     },
-    #     {},
-    # )
-    #
-    #
-    # # And we define a simple grammar to extract it.
-    # parser = grammar(
-    #     {
-    #         "Doc": seq("commentStart", "comment*"),
-    #         "Comment": seq("comment+"),
-    #         "Code": seq("_+"),
-    #     }
-    # )
-    #
-    # with open(Path(__file__).parent.parent / "src/py/coda/domish.py", "rt") as f:
-    #     for atom in marks(python, f.read()):
-    #         print(atom)
+
+    # --
+    # We define the tokens we care about
+    python_tokens: Marks = Marks(
+        {
+            "commentStart": r"[^\n]\s*#\s*\-\-\s*\n",
+            "comment": r"[^\n]\s*#(?P<text>[^\n]*)\n",
+        },
+        {},
+    )
+
+    # print(seq("commentStart", "comment*"))
+    print("=== TEST Parsing using the state machine")
+    # And we define a simple grammar to extract it.
+    python_grammar = grammar(
+        {
+            "Doc": seq("commentStart", "comment*"),
+            "Comment": seq("comment+"),
+            "Code": seq("_+"),
+        }
+    )
+    parser = StateMachine(python_grammar)
+    with open(Path(__file__).parent.parent / "src/py/coda/domish.py", "rt") as f:
+        atoms = []
+        for atom in marks(python_tokens, text := f.read()):
+            # for i, line in enumerate(atom.text.split("\n")):
+            #     print(f"::: {repr(line)}" if i == 0 else f"... {repr(line)}")
+            atoms.append(atom)
+            for matched in parser.feed(atom.type):
+                start = atoms[matched.start]
+                end = atoms[matched.end]
+                print(">>> MATCHED ", matched.name)
+                for line in text[start.start : end.end].split("\n"):
+                    print(f"... {line}")
+                print("<<<")
 
 # EOF
