@@ -106,11 +106,18 @@ class MappingEffector(Effector):
         context: dict[Slot, TPrimitive],
     ) -> Treeish:
         if isinstance(value, list):
-            return [node.apply(context) for node in self.nodes]
+            res: list[VNode] = []
+            for v in value:
+                ctx = context | {CurrentSlot: v}
+                for n in (node.apply(ctx) for node in self.nodes):
+                    res.append(n)
+            return res
         elif isinstance(value, dict):
-            pass
-        print("VALUE", value)
-        return "OK"
+            return self.apply([_ for _ in value.items()], context)
+        elif value is not None:
+            return self.apply([value], context)
+        else:
+            return None
 
 
 # --
@@ -142,7 +149,16 @@ class VNode:
     @staticmethod
     def Ensure(value: Slot | TLiteral | "VNode") -> "VNode":
         """Ensures that the given value is wrapped in a VNode."""
-        return value if isinstance(value, VNode) else VNode("#text", {"value": value})
+        if isinstance(value, VNode):
+            return value
+        elif type(value) in (str, int, float, bool) or value is None:
+            return VNode("#text", {"value": value})
+        elif isinstance(value, Slot):
+            return VNode("#slot", {"value": value})
+        elif value is CurrentSelector:
+            return VNode("#slot", {"value": CurrentSlot})
+        else:
+            raise ValueError(f"Unsupported value type '{type(value)}': {value}")
 
     def __init__(
         self,
@@ -158,17 +174,36 @@ class VNode:
             [VNode.Ensure(_) for _ in children] if children else []
         )
 
+    @property
+    def value(self) -> Optional[TPrimitive | Slot]:
+        return self.attributes.get("value")
+
     def apply(self, context: dict[Slot, TPrimitive]) -> "VNode":
         """Returns a new VNode with the application of the the given context
         to the slots"""
+        children: list[VNode] = []
+        # NOTE: This seems a bit contrived, I supposed an iteartor may
+        # be better?
+        for child in self.children:
+            if child.name == "#slot":
+                applied = child.value.apply(context)
+                if isinstance(applied, list):
+                    for _ in applied:
+                        children.append(VNode.Ensure(_))
+                elif applied is not None:
+                    children.append(VNode.Ensure(applied))
+            else:
+                children.append(child.apply(context))
+
         return VNode(
             name=self.name,
             attributes=Slot.Apply(self.attributes, context),
-            children=[_.apply(context) for _ in self.children],
+            children=children,
         )
 
-    def __str__(self):
+    def __repr__(self):
         """The string representation is straight up HTML"""
+
         if self.name == "#text":
             return f"{self.attributes['value']}"
         else:
@@ -181,7 +216,6 @@ class VNode:
             if not self.children:
                 return f"<{self.name}{attrs}/>"
             else:
-
                 return f"<{self.name}{attrs}>{''.join(str(_) for _ in self.children)}</{self.name}>"
 
 
@@ -206,15 +240,23 @@ def slot() -> Input:
     return Input()
 
 
+# This is the current slot
+CurrentSlot: Input = Input()
+
 # This is the global "current" scope
-_: Proxy[Argument] = Proxy(lambda _: Argument(_))
+CurrentSelector: Proxy[Argument] = Proxy(lambda _: Argument(_))
+_: Proxy[Argument] = CurrentSelector
 
 if __name__ == "__main__":
     print("=== TEST templates: Rendering")
     h = Proxy(VNode.Factory)
     print(h.div("Hello, ", name := slot()).apply({name: "World"}))
     items = slot()
-    print(h.ul(items.map(h.li(_))).apply({items: ["One", "Two", "Three"]}))
+    print(
+        h.ul(items.map(h.li(h.span("My name is ", _)))).apply(
+            {items: ["One", "Two", "Three"]}
+        )
+    )
     print("--- EOK")
 
 # EOF
