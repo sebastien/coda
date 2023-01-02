@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Optional, Iterable, Generic, TypeVar, Callable, Union, Any
+from typing import Optional, Iterable, Generic, TypeVar, Callable, Union, ClassVar, Any
 
 # --
 # # Templates
@@ -68,9 +68,37 @@ class Input(Slot):
 
 
 class Argument(Input):
-    def __init__(self, name: str):
+
+    # List of reserved names
+    RESERVED: ClassVar[list[str]] = ["map", "apply"]
+
+    def __init__(self, key: str | int):
         super().__init__()
-        self.name = name
+        self._key: str | int = key
+
+    def __getattr__(self, name: str | int):
+        if name in Argument.RESERVED or name.startswith("_"):
+            return super().__getattr__(name)
+        else:
+            return Destructured(self, name)
+
+    def __getitem__(self, name: str | int):
+        return Destructured(self, name)
+
+
+class Destructured(Argument):
+    def __init__(self, parent: Argument, key: str | int):
+        super().__init__(key)
+        self._parent = parent
+
+    def apply(self, context: dict["Slot", TComposite]) -> Treeish:
+        res = self._parent.apply(context)
+        if isinstance(res, dict):
+            return res.get(self._key)
+        elif isinstance(res, list) or isinstance(res, tuple):
+            return res[self._key]
+        else:
+            return None
 
 
 # --
@@ -241,20 +269,27 @@ def slot() -> Input:
 
 
 # This is the current slot
-CurrentSlot: Input = Input()
+CurrentSlot: Argument = Argument("_")
+_ = CurrentSlot
 
 # This is the global "current" scope
-CurrentSelector: Proxy[Argument] = Proxy(lambda _: Argument(_))
-_: Proxy[Argument] = CurrentSelector
+
+h: Proxy[Callable[[Any], VNode]] = Proxy(VNode.Factory)
 
 if __name__ == "__main__":
     print("=== TEST templates: Rendering")
-    h = Proxy(VNode.Factory)
     print(h.div("Hello, ", name := slot()).apply({name: "World"}))
+    print("--- TEST effect: Mapping")
     items = slot()
     print(
         h.ul(items.map(h.li(h.span("My name is ", _)))).apply(
             {items: ["One", "Two", "Three"]}
+        )
+    )
+    print("--- TEST effect: Mapping with destructuring")
+    print(
+        h.ul(items.map(h.li(h.span("My name is ", _.name)))).apply(
+            {items: [{"name": "One"}, {"name": "Two"}]}
         )
     )
     print("--- EOK")
