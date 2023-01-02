@@ -168,11 +168,11 @@ class Marks(NamedTuple):
     blocks: dict[str, Block]
 
 
-def marks(marks: Union[re.Pattern[str], Marks], text) -> list[Marker]:
-    return [_ for _ in iterMarks(marks, text)]
+def marks(text: str, marks: Union[re.Pattern[str], Marks]) -> list[Marker]:
+    return [_ for _ in iterMarks(text, marks)]
 
 
-def iterMarks(marks: Union[re.Pattern[str], Marks], text: str) -> Iterator[Marker]:
+def iterMarks(text: str, marks: Union[re.Pattern[str], Marks]) -> Iterator[Marker]:
     parser: re.Pattern[str] = marks if isinstance(marks, re.Pattern) else compile(marks)
     offset: int = 0
     # We iterate on the input `text` using the markers regular expression.
