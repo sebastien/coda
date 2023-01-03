@@ -100,23 +100,27 @@ class StateMachine:
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
-                    yield CompletionEvent(self, t.event, self.start, self.offset)
+                    start = self.start
                     self.start = None
+                    self.status = Status.Start
+                    yield CompletionEvent(self, t.event, start, self.offset)
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
+            start = self.start
+            self.start = None
+            self.state = 0
             # If there is no match and the status is complete, we yield a
             # completion event.
             if self.status is Status.Complete:
                 # FIXME: We should maybe find a name to put instead of None
+                self.status = Status.Start
                 yield CompletionEvent(
                     self,
                     None,
-                    self.offset if self.start is None else self.start,
+                    self.offset if start is None else start,
                     self.offset,
                 )
-            self.start = None
-            self.state = 0
         if increment:
             self.offset += 1
 

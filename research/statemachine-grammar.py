@@ -196,35 +196,52 @@ if __name__ == "__main__":
     # We define the tokens we care about
     python_tokens: Marks = Marks(
         {
-            "commentStart": r"[^\n]\s*#\s*\-\-\s*\n",
-            "comment": r"[^\n]\s*#(?P<text>[^\n]*)\n",
+            "blockStart": r"(^|\n)\s*#\s*\-\-\s*\n",
+            "comment": r"(^|\n)\s*#(?P<text>[^\n]*)\n",
         },
         {},
     )
 
-    # print(seq("commentStart", "comment*"))
+    # print(seq("blockStart", "comment*"))
     print("=== TEST Parsing using the state machine")
     # And we define a simple grammar to extract it.
-    python_grammar = grammar(
+    coda_grammar = grammar(
         {
-            "Doc": seq("commentStart", "comment*"),
+            "Doc": seq("blockStart", "comment*"),
             "Comment": seq("comment+"),
             "Code": seq("_+"),
         }
     )
-    parser = StateMachine(python_grammar)
-    with open(Path(__file__).parent.parent / "src/py/coda/domish.py", "rt") as f:
-        atoms = []
-        for atom in marks(python_tokens, text := f.read()):
-            # for i, line in enumerate(atom.text.split("\n")):
-            #     print(f"::: {repr(line)}" if i == 0 else f"... {repr(line)}")
-            atoms.append(atom)
-            for matched in parser.feed(atom.type):
-                start = atoms[matched.start]
-                end = atoms[matched.end]
-                print(">>> MATCHED ", matched.name)
-                for line in text[start.start : end.end].split("\n"):
-                    print(f"... {line}")
-                print("<<<")
+    print("--- coda_grammar")
+    for step in coda_grammar:
+        # TODO: Find a nice representation for the state machine
+        print(f"    {step} : {coda_grammar[step]}")
+        # TODO: Validate the transitions
+    parser = StateMachine(coda_grammar, name="coda")
+    for atom in ["#text", "blockStart", "comment", "comment", "#text"]:
+        print(f"--- IN {atom}")
+        print(f"    state={parser.state} status={parser.status}")
+        for matched in parser.feed(atom):
+            print(f"... OUT {matched.name}:{matched}")
+            print(f"    state={parser.state} status={parser.status}")
+
+    if False:
+        parser.reset()
+        print("=== TEST Parsing a file using the state machine")
+        with open(Path(__file__).parent.parent / "src/py/coda/domish.py", "rt") as f:
+            atoms = []
+            for atom in marks(text := f.read(), python_tokens):
+                # for i, line in enumerate(atom.text.split("\n")):
+                #     print(f"::: {repr(line)}" if i == 0 else f"... {repr(line)}")
+                atoms.append(atom)
+                print("--- IN", atom.type)
+                for matched in parser.feed(atom.type):
+                    print("... OUT", matched.name)
+                #     start = atoms[matched.start]
+                #     end = atoms[matched.end]
+                #     print(">>> MATCHED ", matched.name)
+                #     for line in text[start.start : end.end].split("\n"):
+                #         print(f"... {line}")
+                #     print("<<<")
 
 # EOF

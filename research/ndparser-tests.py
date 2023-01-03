@@ -19,3 +19,5 @@ BlockSeparator = re.compile("\n([ \t]*\n)+")
 blocks = marks(BLOCKS, BlockSeparator)
 print(blocks)
 print("EOK")
+
+# EOF
