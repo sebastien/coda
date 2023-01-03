@@ -59,6 +59,7 @@ class StateMachine:
         self.offset: int = 0
         self.status: Status = Status.Start
         self.name: Optional[str] = name
+        self.transition: Optional[Transition] = None
 
     def reset(self, offset: int = 0):
         self.state = 0
@@ -82,12 +83,18 @@ class StateMachine:
             and (status := self.status.value) >= Status.Partial.value
             and status < Status.Fail.value
         ):
-            return CompletionEvent(self, None, self.start, self.offset)
+            return CompletionEvent(
+                self,
+                self.transition.event if self.transition else None,
+                self.start,
+                self.offset,
+            )
         else:
             return None
 
     def feed(self, atom: TAtom, increment: bool = True) -> Iterator[StateMachineEvent]:
         t = self.match(atom)
+        self.transition = t
         if t:
             previous = self.state
             if t.status.value > Status.Ready.value and self.start is None:
@@ -100,29 +107,36 @@ class StateMachine:
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
-                    start = self.start
-                    self.start = None
-                    self.status = Status.Start
-                    yield CompletionEvent(self, t.event, start, self.offset)
+                    yield CompletionEvent(self, t.event, self.start, self.offset)
+                self.start = None
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
-            start = self.start
-            self.start = None
-            self.state = 0
             # If there is no match and the status is complete, we yield a
             # completion event.
             if self.status is Status.Complete:
                 # FIXME: We should maybe find a name to put instead of None
-                self.status = Status.Start
                 yield CompletionEvent(
                     self,
                     None,
-                    self.offset if start is None else start,
+                    self.offset if self.start is None else self.start,
                     self.offset,
                 )
+            # TODO: Should we set start to None here?
         if increment:
             self.offset += 1
+
+    def end(self) -> Optional[CompletionEvent]:
+        return (
+            CompletionEvent(
+                self,
+                self.transition.event if self.transition else None,
+                self.offset if self.start is None else self.start,
+                self.offset,
+            )
+            if self.status is Status.Partial
+            else None
+        )
 
     def match(self, atom: TAtom) -> Optional[Transition]:
         """Returns the first transition in the current state that matches
@@ -138,6 +152,18 @@ class StateMachine:
 
     def __repr__(self):
         return f"StateMachine(name={self.name},status={self.status},start={self.start},offset={self.offset})"
+
+
+def pretty(machine: TMachine) -> str:
+    return "\n".join(iterPretty(machine))
+
+
+def iterPretty(machine: TMachine) -> Iterable[str]:
+    for state in machine:
+        yield f"{state:d}:"
+        for token, transition in machine[state].items():
+            event = f" #{transition.event}" if transition.event else ""
+            yield f"   → {transition.target}:{token} [{str(transition.status).rsplit('.')[-1].lower()}]{event}"
 
 
 def mux(
