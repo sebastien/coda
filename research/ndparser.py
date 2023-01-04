@@ -27,6 +27,7 @@ class Inline:
         pass
 
 
+# Here we want to match anything like `_*`code`*_`
 Emphasis = Inline("*", ND, "*")
 Term = Inline("_", ND, "_")
 Code = Inline("`", ND, "`")

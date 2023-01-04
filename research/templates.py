@@ -1,5 +1,16 @@
 from dataclasses import dataclass
-from typing import Optional, Iterable, Generic, TypeVar, Callable, Union, ClassVar, Any
+import inspect
+from typing import (
+    Optional,
+    Iterable,
+    Generic,
+    TypeVar,
+    Callable,
+    Union,
+    ClassVar,
+    Any,
+    ContextManager,
+)
 
 # --
 # # Templates
@@ -247,6 +258,43 @@ class VNode:
                 return f"<{self.name}{attrs}>{''.join(str(_) for _ in self.children)}</{self.name}>"
 
 
+class VNodeFactory(ContextManager):
+
+    Stack: ClassVar[list[VNode]] = []
+
+    def __init__(self, name: str):
+        self.name: str = name
+
+    def __enter__(
+        self,
+        attr: Optional[TAttributes | VNode] = None,
+        *children: VNode | Slot | TLiteral,
+    ):
+        node = self(attr, *children)
+        if VNodeFactory.Stack:
+            VNodeFactory.Stack[-1].children.append(node)
+        VNodeFactory.Stack.append(node)
+        return node
+
+    def __exit__(self, *context):
+        node = VNodeFactory.Stack.pop()
+        # for k, v in (inspect.currentframe().f_back.f_locals).items():
+        #     pass
+
+    def __call__(
+        self,
+        attr: Optional[TAttributes | VNode] = None,
+        *children: VNode | Slot | TLiteral,
+    ) -> VNode:
+        return (
+            VNode(self.name, children=children)
+            if attr is None
+            else VNode(self.name, attributes=attr, children=children)
+            if isinstance(attr, dict)
+            else VNode(self.name, children=[attr] + [VNode.Ensure(_) for _ in children])
+        )
+
+
 class Proxy(Generic[T]):
     def __init__(
         self, creator: Callable[[str], T], state: Optional[dict[str, T]] = None
@@ -274,11 +322,21 @@ _ = CurrentSlot
 
 # This is the global "current" scope
 
-h: Proxy[Callable[[Any], VNode]] = Proxy(VNode.Factory)
+
+@Proxy
+def h(name: str) -> VNodeFactory:
+    return VNodeFactory(name)
+
 
 if __name__ == "__main__":
     print("=== TEST templates: Rendering")
     print(h.div("Hello, ", name := slot()).apply({name: "World"}))
+    print("=== TEST templates: Rendering with context")
+    with h.html as doc:
+        with h.body as _:
+            # TODO: Mixing both context and non-context does not work 100%
+            _.children.append(h.h1("Hello, World!"))
+    print(f"... doc={doc}")
     print("--- TEST effect: Mapping")
     items = slot()
     print(

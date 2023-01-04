@@ -7,10 +7,11 @@ from typing import Optional
 # The next step after our `statemachine` notebook is to integrate the
 # statemachines so that we can express grammars in a more natural way,
 # and derive the state machine from the grammar.
-
+#
 # References:
 # - https://swtch.com/~rsc/regexp/regexp1.html
 # - https://piumarta.com/software/peg/
+# - https://bford.info/pub/lang/peg/
 
 
 def seq(*matches: str) -> dict[int, dict[str, Transition]]:

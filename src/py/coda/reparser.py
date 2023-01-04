@@ -208,6 +208,7 @@ def compile(marks: Marks) -> re.Pattern[str]:
     for k, block in marks.blocks.items():
         res.append(capture(block.start, f"STA_{k}"))
         res.append(capture(block.end, f"END_{k}"))
+    print("RES", res)
     return re.compile("|".join(res), re.MULTILINE)
 
 
