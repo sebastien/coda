@@ -147,5 +147,21 @@ def hlo(message: str):
     out(f"\nHLO:{message}")
 
 
-atexit.register(end)
+def run(path: str) -> TestStatus:
+    print("TEST", path)
+    return TestStatus()
+
+
+if __name__ == "__main__":
+    import glob, sys
+
+    for path in sorted(
+        _
+        for _ in (os.path.abspath(_) for _ in sys.argv[1:] or glob.glob("tests/*"))
+        if _ != os.path.abspath(__file__)
+    ):
+        status = run(path)
+
+else:
+    atexit.register(end)
 # EOF
