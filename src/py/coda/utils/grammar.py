@@ -1,7 +1,5 @@
-from .reparser import Marks, marks
-from .statemachine import StateMachine, Transition, Status, TMachine, TAtom, iterPretty
-from pathlib import Path
-from typing import Optional
+from .statemachine import StateMachine, Transition, Status, TMachine, TAtom
+from typing import cast
 
 # --
 # The next step after our `statemachine` notebook is to integrate the
@@ -149,14 +147,14 @@ def rules(rules: dict[str, list[str]]) -> TMachine:
         *(
             makes(machine, event)
             for event, machine in {
-                k: seq(*(v if isinstance(v, list) else v.split(" ")))
+                k: seq(*(v if isinstance(v, list) else cast(str, v).split(" ")))
                 for k, v in rules.items()
             }.items()
         )
     )
 
 
-def grammar(definition: dict[str, TMachine]) -> TMachine:
+def grammar(definition: dict[str, TMachine]) -> StateMachine:
     return StateMachine(rules(definition))
 
 

@@ -72,6 +72,10 @@ class Block:
     type: str
     fragment: Fragment
 
+    @property
+    def text(self) -> str:
+        return self.fragment.text
+
 
 # --
 # Symbols are extracting by parsing, for instance using TreeSitter to query

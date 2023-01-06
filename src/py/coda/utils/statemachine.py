@@ -1,4 +1,4 @@
-from typing import Optional, Union, Callable, Iterable, Iterator
+from typing import Optional, Union, Callable, Iterable, Iterator, Self
 from enum import Enum
 from dataclasses import dataclass
 
@@ -61,11 +61,13 @@ class StateMachine:
         self.name: Optional[str] = name
         self.transition: Optional[Transition] = None
 
-    def reset(self, offset: int = 0):
+    def reset(self, offset: int = 0) -> Self:
         self.state = 0
         self.start = None
         self.offset = offset
         self.status = Status.Start
+        self.transition = None
+        return self
 
     def process(self, atoms: Iterable[TAtom]) -> Iterator[StateMachineEvent]:
         """Processes the stream"""
@@ -139,7 +141,7 @@ class StateMachine:
             self.offset += 1
 
     def end(self) -> Optional[CompletionEvent]:
-        return (
+        res: Optional[CompletionEvent] = (
             CompletionEvent(
                 self,
                 self.transition.event if self.transition else None,
@@ -149,6 +151,8 @@ class StateMachine:
             if self.status is Status.Partial
             else None
         )
+        self.reset()
+        return res
 
     def match(self, atom: TAtom) -> Optional[Transition]:
         """Returns the first transition in the current state that matches

@@ -103,10 +103,10 @@ def record(result: bool) -> bool:
 
 
 def same(value: TPrimitive, expected: TPrimitive) -> bool:
-    return record(
+    return (
         fail(f"Value should be like {expected}, got: {value}")
         if not Check.Same(value, expected)
-        else True
+        else record(True)
     )
 
 
