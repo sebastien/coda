@@ -8,7 +8,7 @@ MVP:
 [-] Implement a parser to extract basic blocks from a text file with (`# --` or `// --`)
 [-] Implement a renderer to convert the block structure to HTML
 [-] Implement styling to generate a stylesheet
-[-] Implement design tokens to modularise the styling
+[X] Implement design tokens to modularise the styling
 
 Text Parser:
 

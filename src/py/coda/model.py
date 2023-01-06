@@ -31,11 +31,37 @@ class SymbolType(Enum):
 
 # --
 # Fragments are use to mark subsets of the source text.
-@dataclass
 class Fragment:
-    source: str
-    start: int
-    end: int
+    @property
+    def text(self) -> str:
+        raise NotImplementedError
+
+    def __repr__(self) -> str:
+        return f"<{self.__class__.__name__}:{repr(self.text)}>"
+
+    def __str__(self) -> str:
+        return self.text
+
+
+class LiteralFragment(Fragment):
+    def __init__(self, text: str):
+        super().__init__()
+        self.value = text
+
+    @property
+    def text(self) -> str:
+        return self.value
+
+
+class StringFragment(Fragment):
+    def __init__(self, text: str, start: int = 0, end: Optional[int] = None):
+        self.source: str = text
+        self.start = start
+        self.end = end
+
+    @property
+    def text(self) -> str:
+        return self.source[self.start : self.end]
 
 
 # --
