@@ -2,12 +2,12 @@ from typing import Optional, Union, Callable, Iterable, Iterator
 from enum import Enum
 from dataclasses import dataclass
 
-# --
+# rn --
 # A general way to implement state machines, with the idea of using
 # them for parsing.
 
-TAtom = Union[str]
-TState = Union[int]
+TAtom = str
+TState = int
 TMachine = dict[TState, dict[TAtom, "Transition"]]
 
 
@@ -39,7 +39,7 @@ StateMachineEvent = Union["CompletionEvent"]
 class CompletionEvent:
     machine: "StateMachine"
     name: Optional[str]
-    # The `start` and `end` position in the input stream
+    # The `start` and `end` position in the input stream, end is exclusive.
     start: int
     end: int
 
@@ -87,10 +87,16 @@ class StateMachine:
                 self,
                 self.transition.event if self.transition else None,
                 self.start,
-                self.offset,
+                self.offset + (1 if status is Status.Complete.value else 0),
             )
         else:
             return None
+
+    def run(self, atoms: Iterator[TAtom]) -> Iterator[StateMachineEvent]:
+        for atom in atoms:
+            yield from self.feed(atom)
+        if match := self.end():
+            yield match
 
     def feed(self, atom: TAtom, increment: bool = True) -> Iterator[StateMachineEvent]:
         t = self.match(atom)
@@ -101,26 +107,32 @@ class StateMachine:
                 self.start = self.offset
             self.state = t.target
             self.status = t.status
-            if t.status is Status.End:
+            if t.status in (Status.Complete, Status.End):
                 # In case we complete a match, we fire a completion
                 # event and then try to match again.
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
                 else:
-                    yield CompletionEvent(self, t.event, self.start, self.offset)
+                    yield CompletionEvent(
+                        self,
+                        t.event,
+                        self.start,
+                        self.offset + (1 if t.status is Status.Complete else 0),
+                    )
                 self.start = None
                 if previous != self.state:
                     yield from self.feed(atom, False)
         else:
             # If there is no match and the status is complete, we yield a
             # completion event.
-            if self.status is Status.Complete:
+            if self.status in (Status.Complete, Status.End):
                 # FIXME: We should maybe find a name to put instead of None
+                print("END.B")
                 yield CompletionEvent(
                     self,
                     None,
                     self.offset if self.start is None else self.start,
-                    self.offset,
+                    self.offset + (1 if self.status is Status.Complete else 0),
                 )
             # TODO: Should we set start to None here?
         if increment:
@@ -151,7 +163,7 @@ class StateMachine:
             return None
 
     def __repr__(self):
-        return f"StateMachine(name={self.name},status={self.status},start={self.start},offset={self.offset})"
+        return f"StateMachine(name={self.name},status={self.status},start={self.start},offset={self.offset},transition={self.transition})"
 
 
 def pretty(machine: TMachine) -> str:
@@ -176,87 +188,4 @@ def mux(
             yield from machine.feed(atom)
 
 
-if __name__ == "__main__":
-    # --
-    # We define a state machine to recognise blocks based on a stream of tokens.
-    blocks = StateMachine(
-        {
-            0: {
-                "block": Transition(1, Status.Incomplete),
-            },
-            1: {"comment": Transition(2, Status.Complete)},
-            # TODO: we need to indicate the end state
-            2: {
-                "comment": Transition(2, Status.Complete),
-                "*": Transition(0, Status.End),
-            },
-        },
-        name="Block",
-    )
-
-    # --
-    # We define a state machine to recognise comments, based on a stream of tokens.
-    comments = StateMachine(
-        {
-            0: {
-                "comment": Transition(1, Status.Incomplete),
-            },
-            1: {
-                "comment": Transition(1, Status.Complete),
-                "*": Transition(0, Status.End),
-            },
-        },
-        name="Comment",
-    )
-
-    # --
-    # Next level, we define a machine that recongnises continuous sequences.
-    # For instance, we can take one that recognises `A+` and another that recognises
-    # `B+`.
-    aabb = StateMachine(
-        {
-            0: {
-                "A": Transition(10, Status.Incomplete),
-                "B": Transition(20, Status.Incomplete),
-                "*": Transition(0, Status.Ready),
-            },
-            10: {
-                "A": Transition(10, Status.Complete),
-                "*": Transition(0, Status.End),
-            },
-            20: {
-                "B": Transition(20, Status.Complete),
-                "*": Transition(0, Status.End),
-            },
-        },
-        name="AABB",
-    )
-    print("=== TEST Parsing a stream of tokens with state machine")
-    stream = ["block", "comment", "comment", "block", "comment", "line", "line"]
-    output = ["Block", "Comment", "Block", "Comment"]
-    for i, match in enumerate(mux(stream, [blocks, comments])):
-        actual = match.machine.name
-        expected = output[i]
-        print(
-            f"... {i:02d} OK  {actual}"
-            if actual == expected
-            else f"... {i:02d} ERR {actual} != {expected}"
-        )
-        assert expected == actual
-    print("--- OK")
-
-    print("=== TEST aabb: Using a machine to match multiple sequences")
-    stream = "AA AAAA BB BBBB CCCC AA BBBBB".split()
-    output = [_ for _ in stream if _[0] in "AB"]
-    for i, match in enumerate(aabb.process(text := " ".join(stream))):
-        actual = text[match.start : match.end]
-        expected = output[i]
-        print(
-            f"... {i:02d} OK  {match.start:02d}:{match.end:02d}='{text[match.start : match.end]}'"
-            if actual == expected
-            else f"... {i:02d} ERR {match.start:02d}:{match.end:02d}='{text[match.start : match.end]}' != '{expected}'"
-        )
-        assert expected == actual
-    print("--- OK")
-    print("EOK")
 # EOF

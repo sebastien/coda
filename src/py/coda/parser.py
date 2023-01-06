@@ -13,6 +13,7 @@ CODA_BLOCK_MARKS = compile(
         {
             "blockStart": r"^([ \t]*)#[ ]+--[ ]*\n",
             "comment": r"^([ \t]*)#.*$",
+            "separator": r"^[ \t]*\n$",
         },
         {},
     )
@@ -21,6 +22,7 @@ CODA_BLOCK_GRAMMAR = grammar(
     {
         "Block": seq("blockStart", "comment*"),
         "Comment": seq("comment+"),
+        "Sep": seq("separator+"),
         "Code": seq("_+"),
     }
 )
@@ -29,13 +31,21 @@ CODA_BLOCK_GRAMMAR = grammar(
 def blocks(text: str) -> Iterator[Block]:
     parser = StateMachine(CODA_BLOCK_GRAMMAR, name="coda-blocks")
     markers: list[Marker] = []
-    for marker in marks(text, CODA_BLOCK_MARKS):
-        markers.append(marker)
-        for event in parser.feed(marker.type):
-            start = markers[event.start]
-            end = markers[event.start]
-            fragment = StringFragment(text, start.start, end.end)
-            yield Block(event.name, fragment)
+    for _ in ["separator", "separator", "separator"]:
+        print("_", _)
+        for m in parser.feed(_):
+            print("m", m)
+            yield m
+    if False:
+        for marker in marks(text, CODA_BLOCK_MARKS):
+            markers.append(marker)
+            print("M", marker.type)
+            for event in parser.feed(marker.type):
+                start = markers[event.start].start
+                end = markers[event.end].start
+                fragment = StringFragment(text, start, end)
+                # yield Block(event.name, fragment)
+        yield None
 
 
 if __name__ == "__main__":
