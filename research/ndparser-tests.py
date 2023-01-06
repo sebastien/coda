@@ -1,5 +1,5 @@
 from coda.reparser import Marks, Block, compile, marks, text
-from grammar import
+from grammar import grammar, seq
 from typing import Optional
 import re
 
@@ -48,6 +48,12 @@ if True:
             "ref": inline("[", "]"),
             "url": inline("<", ">"),
         },
+    )
+    nd_grammar = grammar(
+        {
+            "Emphasis": seq("emphasis", _not("emphasis+"), "emphasis"),
+            "Code": seq("code", "!emphasis+", "emphasis"),
+        }
     )
     for m in marks("*_`code`_*", nd_marks):
         print("M", m)

@@ -5,6 +5,7 @@
 # format designed for semantic note taking.
 
 import re
+from typing import Optional
 
 # --
 # ## Parsing primitivives
