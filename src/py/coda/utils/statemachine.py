@@ -129,7 +129,6 @@ class StateMachine:
             # completion event.
             if self.status in (Status.Complete, Status.End):
                 # FIXME: We should maybe find a name to put instead of None
-                print("END.B")
                 yield CompletionEvent(
                     self,
                     None,
@@ -151,7 +150,6 @@ class StateMachine:
             if self.status is Status.Partial
             else None
         )
-        self.reset()
         return res
 
     def match(self, atom: TAtom) -> Optional[Transition]:

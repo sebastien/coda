@@ -1,13 +1,14 @@
 from coda.utils.grammar import grammar
+from coda.utils.statemachine import StateMachine
 from harness import test, same, fail, out, hlo
 
-hlo("Exercises the grammar rules for state machines")
+hlo("Creation of single state machinne rules")
 
 
 def check(rules: dict[str, str], input: list[str], expected: list[list[str]]):
     """Checkes that the input produces the output with the given rules"""
     i: int = 0
-    parser = grammar(rules)
+    parser = StateMachine(grammar(rules))
 
     for match in parser.run(input):
         name = match.name

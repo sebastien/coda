@@ -26,6 +26,7 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
         match = matches[i]
         name: str = ""
         card: str = ""
+        is_last: bool = i == n - 1
         # --
         # First step, we extract the cardinality
         if (card := match[-1]) in "?+*":
@@ -42,36 +43,63 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
             case "":
                 # --
                 # If it's a single match, so when we match this step, we go
-                res[j] = {name: Transition(0, Status.Complete)}
+                if is_last:
+                    res[j] = {name: Transition(0, Status.End)}
+                else:
+                    res[j] = {name: Transition(j + 1, Status.Partial)}
                 j += 1
             case "?":
-                res[j] = {
-                    name: Transition(0, Status.Complete),
-                    "*": Transition(0, Status.End),
-                }
+                if is_last:
+                    res[j] = {
+                        name: Transition(0, Status.End),
+                        "*": Transition(0, Status.End),
+                    }
+                else:
+                    res[j] = {
+                        name: Transition(j + 1, Status.Partial),
+                        "*": Transition(j + 1, Status.Partial),
+                    }
                 j += 1
             case "+":
                 # We start with a transition that matches the `name`
                 res[j] = {
-                    name: Transition(j + 1, Status.Partial),
+                    name: Transition(j + 1, Status.Complete),
                 }
                 # Then the next step can match `name` again, or end then.
-                res[j + 1] = {
-                    name: Transition(j + 1, Status.Partial),
-                    "*": Transition(0, Status.End),
-                }
+                if is_last:
+                    res[j + 1] = {
+                        name: Transition(j + 1, Status.Complete),
+                        "*": Transition(0, Status.End),
+                    }
+                else:
+                    res[j + 1] = {
+                        name: Transition(j + 1, Status.Partial),
+                        "*": Transition(j + 2, Status.Partial),
+                    }
                 j += 2
             case "*":
-                # We start with a transition that matches the `name`
-                res[j] = {
-                    name: Transition(j + 1, Status.Partial),
-                    "*": Transition(0, Status.End),
-                }
-                # Then the next step can match `name` again, or end then.
-                res[j + 1] = {
-                    name: Transition(j + 1, Status.Partial),
-                    "*": Transition(0, Status.End),
-                }
+                if is_last:
+                    res[j] = {
+                        name: Transition(j + 1, Status.Complete),
+                        "*": Transition(0, Status.End),
+                    }
+                    # Then the next step can match `name` again, or end then.
+                    res[j + 1] = {
+                        name: Transition(j + 1, Status.Complete),
+                        "*": Transition(0, Status.End),
+                    }
+
+                else:
+                    # We start with a transition that matches the `name`
+                    res[j] = {
+                        name: Transition(j + 1, Status.Partial),
+                        "*": Transition(j + 2, Status.Partial),
+                    }
+                    # Then the next step can match `name` again, or end then.
+                    res[j + 1] = {
+                        name: Transition(j + 1, Status.Partial),
+                        "*": Transition(j + 2, Status.Partial),
+                    }
                 j += 2
         i += 1
     return res
@@ -139,7 +167,7 @@ def makes(machine: TMachine, event: str) -> TMachine:
     return machine
 
 
-def rules(rules: dict[str, list[str]]) -> TMachine:
+def grammar(rules: dict[str, str | list[str]]) -> TMachine:
     """Combines all the rules in the given machines to produce the event
     denoted by the key upon succes."""
 
@@ -147,15 +175,11 @@ def rules(rules: dict[str, list[str]]) -> TMachine:
         *(
             makes(machine, event)
             for event, machine in {
-                k: seq(*(v if isinstance(v, list) else cast(str, v).split(" ")))
+                k: seq(*(v if isinstance(v, list) else v.split(" ")))
                 for k, v in rules.items()
             }.items()
         )
     )
-
-
-def grammar(definition: dict[str, TMachine]) -> StateMachine:
-    return StateMachine(rules(definition))
 
 
 # EOF

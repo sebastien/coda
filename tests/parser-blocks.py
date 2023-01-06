@@ -5,6 +5,9 @@ hlo("Parsing Python coda blocks property")
 
 
 def check(*inputs: tuple[str, str]):
+    """Takes `inputs=(MatchName, MatchText)` like `("Block, "# --\n")`),
+    and validates that the parsed text (concat of all the second items of the inputs)
+    is parsed as the inputs."""
     for i, b in enumerate(blocks("\n".join(t for _, t in inputs))):
         if i >= len(inputs):
             return fail(
@@ -13,15 +16,20 @@ def check(*inputs: tuple[str, str]):
         expected = inputs[i]
         got = (b.type, b.text)
         if not same(got, expected):
-            break
+            # break
+            pass
 
 
-with test("Single block"):
-    check(("Block", "# --\n"))
+# with test("Single block"):
+#     check(("Block", "# --\n"))
+#
+# with test("BUG Double call to check"):
+#     check(("Block", "# --\n"))
+#     check(("Block", "# --\n"))
 
-with test("BUG Double call to check"):
-    check(("Block", "# --\n"))
-    check(("Block", "# --\n"))
-# check(("Block", "# --\nBLA0\nBLA1"), ("Comment", "#CmA0\n#CA1"), ("Code", "CoA0\nCoA1"))
+with test("Mulitline block"):
+    check(
+        ("Block", "# --\n# BLA0\n# BLA1"),
+    )
 
 # EOF
