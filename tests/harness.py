@@ -148,9 +148,17 @@ def context(exception: Exception) -> Exception:
         # if path == frame.f_code.co_filename:
         frame = tb.tb_frame
         code = frame.f_code
+        # TODO: This is not super precise, as it only shows the scope, not the line
+        # if we have something like:
+        # ```
+        # with test():
+        #   check()
+        #   check() # The scope will be test() not check()
+        #   check()
+        # ```
         if frame.f_code.co_filename != path:
             out(
-                f" …  in {code.co_name + '(…)':15s} at line {frame.f_lineno+1:4d} in {os.path.relpath(frame.f_code.co_filename, '.')}"
+                f" …  in {code.co_name + '(…)':15s} at line {frame.f_lineno:4d} in {os.path.relpath(frame.f_code.co_filename, '.')}"
             )
         tb = tb.tb_next
     return exception
@@ -179,14 +187,14 @@ def hlo(message: str):
 
 @dataclass
 class Options:
-    stopOnFail: bool = True
+    stopOnFail: bool = False
 
 
 OPTIONS: list[Options] = [Options()]
 
 
 @contextmanager
-def harness(*, stopOnFail: bool = True) -> Options:
+def harness(*, stopOnFail: bool = False) -> Options:
     options = Options(stopOnFail=stopOnFail)
     OPTIONS.append(options)
     try:

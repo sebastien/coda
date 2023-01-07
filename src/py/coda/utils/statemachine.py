@@ -15,7 +15,7 @@ class Status(Enum):
     Start = 0  # The machine is in start position
     Ready = 1  # The machine is ready, but hasn't matched anything yet
     Incomplete = 2  #  Cannot form a match yet
-    Partial = 3  # Matches form a partial unit
+    Partial = 3  # Can form a match, but may be expanded
     Complete = 4  # Matches form a complete unit
     # Once end reaches, the only transition out is back to start
     End = 5
@@ -100,58 +100,73 @@ class StateMachine:
         if match := self.end():
             yield match
 
-    def feed(self, atom: TAtom, increment: bool = True) -> Iterator[StateMachineEvent]:
-        t = self.match(atom)
-        self.transition = t
+    def feed(
+        self, atom: TAtom, *, increment: bool = True, previous: Optional[int] = None
+    ) -> Iterator[StateMachineEvent]:
+        self.transition = t = self.match(atom)
         if t:
-            previous = self.state
+            # If we have a matching transition, then the go through it
             if t.status.value > Status.Ready.value and self.start is None:
+                # If the machine is ready and start is None, we have a new match
+                # TODO: Shouldn't we detect if the previous transition was compelte?
                 self.start = self.offset
             self.state = t.target
             self.status = t.status
-            if t.status in (Status.Complete, Status.End):
-                # In case we complete a match, we fire a completion
-                # event and then try to match again.
+            if t.status is Status.End:
+                # In case we reach the End of a match, we fire a completion
+                # event…
                 if self.start is None:
                     raise RuntimeError(f"Transition completed with no start: {t}")
+                elif self.offset == self.start and self.start == previous:
+                    # This is the edge case when we have a machine with
+                    # `{0:{"*":(0,"End")}}` which may not consume anything.
+                    # FIXME: This is a bit inelegant, and we should ensure
+                    # that the conditions are representative.
+                    pass
                 else:
                     yield CompletionEvent(
                         self,
                         t.event,
                         self.start,
-                        self.offset + (1 if t.status is Status.Complete else 0),
+                        self.offset,
                     )
+                start = self.start
                 self.start = None
-                # FIXME: Not sure why we need that
-                # if previous != self.state:
-                #     yield from self.feed(atom, False)
+                # And then try to match again. This is required as an End state
+                # means that the current set of transitions can't match any further,
+                # and so we need to restart with the target state.
+                if increment is True:
+                    yield from self.feed(atom, increment=False, previous=start)
+            else:
+                # In any other case, we don't have anything specific to do.
+                # Note that `Complete` transitions won't trigger a CompletionEvent
+                # up until `end` is explicitely called, or an `End` transition happens.
+                pass
         else:
-            # If there is no match and the status is complete, we yield a
+            # If there is no match and the status is End, we yield a
             # completion event.
-            if self.status in (Status.Complete, Status.End):
+            if self.status is Status.End:
                 # FIXME: We should maybe find a name to put instead of None
                 yield CompletionEvent(
                     self,
                     None,
                     self.offset if self.start is None else self.start,
-                    self.offset + (1 if self.status is Status.Complete else 0),
+                    self.offset,
                 )
-            # TODO: Should we set start to None here?
+        # In all cases, we incremenet the offset as we got fed an atom
         if increment:
             self.offset += 1
 
     def end(self) -> Optional[CompletionEvent]:
-        res: Optional[CompletionEvent] = (
-            CompletionEvent(
+        if self.status is Status.Complete:
+            return CompletionEvent(
                 self,
                 self.transition.event if self.transition else None,
                 self.offset if self.start is None else self.start,
                 self.offset,
             )
-            if self.status is Status.Partial
-            else None
-        )
-        return res
+        else:
+            return None
 
     def match(self, atom: TAtom) -> Optional[Transition]:
         """Returns the first transition in the current state that matches

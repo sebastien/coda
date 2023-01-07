@@ -1,5 +1,4 @@
-from .statemachine import StateMachine, Transition, Status, TMachine, TAtom
-from typing import cast
+from .statemachine import Transition, Status, TMachine, TAtom
 
 # --
 # The next step after our `statemachine` notebook is to integrate the
@@ -36,42 +35,52 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
             card = ""
         name = "*" if name == "_" else name
         # --
-        # We get the state machine, and its transitions. The
-        # --
-        # Now, based on the cardinality we add specific transitions
+        # Now, based on the cardinality we add specific transitions. We
         match card:
             case "":
                 # --
-                # If it's a single match, so when we match this step, we go
+                # If it's a single match, so when we match this step.
+                # We differentiate between last steps and other steps. A last
+                # step will set the status to Complete or End, while a non last
+                # step will always set to Partial, so that `Partial → (Complete | End)`
                 if is_last:
-                    res[j] = {name: Transition(0, Status.Complete)}
+                    res[j] = {name: Transition(j + 1, Status.Complete)}
+                    # NOTE here how we have an extra state to denote the end, this
+                    # is true for `?` as well.
+                    res[j + 1] = {"*": Transition(0, Status.End)}
+                    j += 1
                 else:
                     res[j] = {name: Transition(j + 1, Status.Partial)}
-                j += 1
+                    j += 1
             case "?":
                 if is_last:
                     res[j] = {
-                        name: Transition(0, Status.Complete),
+                        name: Transition(j + 1, Status.Complete),
                         "*": Transition(0, Status.End),
                     }
+                    res[j + 1] = {"*": Transition(0, Status.End)}
+                    j += 1
                 else:
                     res[j] = {
                         name: Transition(j + 1, Status.Partial),
                         "*": Transition(j + 1, Status.Partial),
                     }
-                j += 1
+                    j += 1
             case "+":
                 # We start with a transition that matches the `name`
-                res[j] = {
-                    name: Transition(j + 1, Status.Complete),
-                }
                 # Then the next step can match `name` again, or end then.
                 if is_last:
+                    res[j] = {
+                        name: Transition(j + 1, Status.Complete),
+                    }
                     res[j + 1] = {
                         name: Transition(j + 1, Status.Complete),
                         "*": Transition(0, Status.End),
                     }
                 else:
+                    res[j] = {
+                        name: Transition(j + 1, Status.Partial),
+                    }
                     res[j + 1] = {
                         name: Transition(j + 1, Status.Partial),
                         "*": Transition(j + 2, Status.Partial),
@@ -164,13 +173,11 @@ def makes(machine: TMachine, event: str) -> TMachine:
         }
         for state, transitions in machine.items()
     }
-    return machine
 
 
 def grammar(rules: dict[str, str | list[str]]) -> TMachine:
     """Combines all the rules in the given machines to produce the event
-    denoted by the key upon succes."""
-
+    denoted by the key upon success."""
     return combine(
         *(
             makes(machine, event)

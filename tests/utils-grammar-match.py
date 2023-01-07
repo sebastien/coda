@@ -39,15 +39,15 @@ def check(rules: dict[str, str], *inputs: tuple[str, str]) -> bool:
         return False
 
 
-# with test("One rule grammar"):
-#     check({"Sep": "sep+"}, ("Sep", "sep"))
-#     check({"Sep": "sep+"}, ("Sep", "sep sep"))
-#     check({"Sep": "sep+"}, ("Sep", "sep sep sep"))
+with test("One rule grammar"):
+    check({"Sep": "sep+"}, ("Sep", "sep"))
+    check({"Sep": "sep+"}, ("Sep", "sep sep"))
+    check({"Sep": "sep+"}, ("Sep", "sep sep sep"))
 
 with test("One rule, two tokens"):
     check({"Block": "block comment"}, ("Block", "block comment"))
-    # check(g, ("Block", "block"), ("Code", "code"))
-    # check(g, ("Block", "block comment"), ("Code", "code"))
+    check(g, ("Block", "block"), ("Code", "code"))
+    check(g, ("Block", "block comment"), ("Code", "code"))
 
 
 # EOF

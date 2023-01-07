@@ -1,89 +1,42 @@
-from coda.utils.grammar import grammar
-from coda.utils.statemachine import StateMachine
-from harness import test, same, fail, out, hlo, harness
+from coda.utils.grammar import grammar, seq
+from coda.utils.statemachine import StateMachine, pretty
+from harness import test, same, fail, out, hlo
+import re
 
-hlo("Creation of single state machinne rules")
+hlo("Exercises the translation of seq() into transitions")
 
 
-def check(rules: dict[str, str], input: str, *expected: tuple[str, str]):
-    """Checkes that the input produces the output with the given rules"""
-    i: int = 0
-    parser = StateMachine(grammar(rules))
-
-    for match in parser.run(tokens := input.split()):
-        name = match.name
-        if i >= len(expected):
-            return fail(
-                f"Expected {len(expected)} got {i+1}, extra={match} input={repr(input)}"
+def check(tokens: str, *expected: str) -> bool:
+    """Takes a list of expected transitions like `EVENT:ORIGIN->TARGET[STATE]`"""
+    transitions = seq(*tokens.split())
+    steps: list[str] = []
+    for origin, states in transitions.items():
+        for event, transition in states.items():
+            steps.append(
+                f"{event}:{origin}->{transition.target}{str(transition.status).split('.')[1][0]}"
             )
-        if not same(
-            (match.name, " ".join(tokens[match.start : match.end])), expected[i]
-        ):
-            out(f" …  {parser}")
-        i += 1
-    if i < len(expected):
-        fail(f"Expected {len(expected)} got {i}, missing: {expected[i:]}")
-        out(f" …  {parser}")
+    for i, t in enumerate(expected):
+        if not same(steps[i], t):
+            out(f" …  Step {i+1}/{len(transitions)} failed")
+            for j, step in enumerate(steps):
+                if step == expected[j]:
+                    out(f" …  [{j:2d}] {step}")
+                else:
+                    out(f" ~  [{j:2d}] {step} expected={expected[j]}")
+            return False
+    return True
 
 
-with harness(stopOnFail=True):
+with test("Single token sequences"):
+    check("block", "block:0->1C", "*:1->0E")
+    check("block?", "block:0->1C", "*:0->0E", "*:1->0E")
+    check("block+", "block:0->1C", "block:1->1C", "*:1->0E")
+    check("block*", "block:0->1C", "*:0->0E", "block:1->1C", "*:1->0E")
 
-    with test("Grammar ONE combinator"):
-        check(
-            {"M": "T"},
-            "T",
-            ("M", "T"),
-        )
-        check(
-            {"M": "T"},
-            "T T",
-            ("M", "T"),
-            ("M", "T"),
-        )
-
-    with test("Grammar OPTIONALLY ONE combinator"):
-        check(
-            {"M": "T?"},
-            "T",
-            ("M", "T"),
-        )
-
-        # The match should be empty as T matches anything.
-        check(
-            {"M": "T?"},
-            "A",
-            ("M", ""),
-        )
-
-    with test("Grammar MANY combinator"):
-        check(
-            {"M": "T+"},
-            "T",
-            ("M", "T"),
-        )
-        check(
-            {"M": "T+"},
-            "T T",
-            ("M", "T T"),
-        )
-        # for t in ["T", "T T", "T T T", "T T T T T T T"]:
-        #     check({"M": "T+"}, t, ("M", t))
-
-    # with test("Grammar OPTIONALLY MANY combinator"):
-    #     check(
-    #         {"M": "T*"},
-    #         ["A"],
-    #         [
-    #             ["M"],
-    #         ],
-    #     )
-    #     for t in (_.split() for _ in ["T", "T T", "T T T", "T T T T T T T"]):
-    #         check(
-    #             {"M": "T+"},
-    #             t,
-    #             [
-    #                 ["M"] + t,
-    #             ],
-    #         )
+with test("Double token sequences"):
+    check("block comment", "block:0->1P", "comment:1->2C", "*:2->0E")
+    check("block comment?", "block:0->1P", "comment:1->2C", "*:1->0E", "*:2->0E")
+    check("block comment+", "block:0->1P", "comment:1->2C", "comment:2->2C", "*:2->0E")
+    check("block comment*", "block:0->1P", "comment:1->2C", "*:1->0E")
 
 # EOF
