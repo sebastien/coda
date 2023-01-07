@@ -44,14 +44,14 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
                 # --
                 # If it's a single match, so when we match this step, we go
                 if is_last:
-                    res[j] = {name: Transition(0, Status.End)}
+                    res[j] = {name: Transition(0, Status.Complete)}
                 else:
                     res[j] = {name: Transition(j + 1, Status.Partial)}
                 j += 1
             case "?":
                 if is_last:
                     res[j] = {
-                        name: Transition(0, Status.End),
+                        name: Transition(0, Status.Complete),
                         "*": Transition(0, Status.End),
                     }
                 else:

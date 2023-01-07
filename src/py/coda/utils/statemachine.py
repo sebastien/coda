@@ -122,8 +122,9 @@ class StateMachine:
                         self.offset + (1 if t.status is Status.Complete else 0),
                     )
                 self.start = None
-                if previous != self.state:
-                    yield from self.feed(atom, False)
+                # FIXME: Not sure why we need that
+                # if previous != self.state:
+                #     yield from self.feed(atom, False)
         else:
             # If there is no match and the status is complete, we yield a
             # completion event.
@@ -163,6 +164,9 @@ class StateMachine:
         else:
             # That's the end
             return None
+
+    def pretty(self) -> str:
+        return pretty(self.transitions)
 
     def __repr__(self):
         return f"StateMachine(name={self.name},status={self.status},start={self.start},offset={self.offset},transition={self.transition})"

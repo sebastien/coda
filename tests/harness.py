@@ -1,8 +1,12 @@
 from typing import Union, Optional, Any, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from fcntl import fcntl, F_GETFL, F_SETFL
 import os
 import atexit
+import subprocess
+import time
+import select
 
 
 # --
@@ -11,6 +15,10 @@ import atexit
 # A simple RAP-compatible test harness.
 
 TPrimitive = Union[str, bool, int, float, None, list, dict]
+
+
+class StopTesting(Exception):
+    pass
 
 
 class Check:
@@ -75,13 +83,14 @@ def fail(message: Union[Exception, str], **data: Any):
         out(
             f"!!! EXCP {f'{message}: [{exception.__class__.__name__}] {exception}' if message else f'[{exception.__class__.__name__}] {exception}'}"
         )
-        tb = exception.__traceback__
-        while tb:
-            code = tb.tb_frame.f_code
-            out(
-                f" …  in {code.co_name:15s} at line {tb.tb_lineno:4d} in {os.path.relpath(code.co_filename, '.')}",
-            )
-            tb = tb.tb_next
+        context(exception)
+        # tb = exception.__traceback__
+        # while tb:
+        #     code = tb.tb_frame.f_code
+        #     out(
+        #         f" …  in {code.co_name:15s} at line {tb.tb_lineno:4d} in {os.path.relpath(code.co_filename, '.')}",
+        #     )
+        #     tb = tb.tb_next
     else:
         out(f" !  FAIL {message}")
         for k, v in data.items():
@@ -99,6 +108,8 @@ def record(result: bool) -> bool:
         if status:
             status.errors += 1
         All.errors += 1
+        if OPTIONS[-1].stopOnFail:
+            raise StopTesting()
     return result
 
 
@@ -118,12 +129,31 @@ def test(name: str):
     TESTS.append(status)
     try:
         yield TestStatus
+    except StopTesting as e:
+        raise context(e)
     except Exception as e:
         status.exception = e
         fail(e)
+        context(e)
     finally:
         TESTS.pop()
         end(status)
+
+
+def context(exception: Exception) -> Exception:
+    """Prints out the context for this exception"""
+    path = os.path.abspath(__file__)
+    tb = exception.__traceback__
+    while tb:
+        # if path == frame.f_code.co_filename:
+        frame = tb.tb_frame
+        code = frame.f_code
+        if frame.f_code.co_filename != path:
+            out(
+                f" …  in {code.co_name + '(…)':15s} at line {frame.f_lineno+1:4d} in {os.path.relpath(frame.f_code.co_filename, '.')}"
+            )
+        tb = tb.tb_next
+    return exception
 
 
 def end(status: TestStatus = All) -> int:
@@ -147,8 +177,74 @@ def hlo(message: str):
     out(f"\nHLO:{message}")
 
 
-def run(path: str) -> TestStatus:
-    print("TEST", path)
+@dataclass
+class Options:
+    stopOnFail: bool = True
+
+
+OPTIONS: list[Options] = [Options()]
+
+
+@contextmanager
+def harness(*, stopOnFail: bool = True) -> Options:
+    options = Options(stopOnFail=stopOnFail)
+    OPTIONS.append(options)
+    try:
+        yield options
+    except StopTesting:
+        out(f" .  STOP on failure at check {All.total}, after {All.success} passed.")
+    except Exception as e:
+        raise e
+    finally:
+        OPTIONS.pop()
+    return options
+
+
+class RAPParser:
+    RE_DIRECTIVE = r"...[ ][A-Z]+"
+
+
+RUNNERS = {"*": "sh", "py": "python"}
+
+
+def run(path: str, timeout: Optional[float] = None, bufsize: int = 1024) -> TestStatus:
+    ext: str = path.rsplit(".", 1)[-1]
+    cmd: list[str] = [RUNNERS.get(ext, RUNNERS["*"]), path]
+    pipe: subprocess.Popen = subprocess.Popen(  # nosec: B603
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        bufsize=0,
+        start_new_session=True,
+    )
+    assert pipe.stderr is not None
+    assert pipe.stdout is not None
+    # We set the pipes to non blocking, this should be of benefit when
+    # the process (service) is terminating.
+    fcntl(
+        fd_err := pipe.stderr.fileno(), F_SETFL, fcntl(fd_err, F_GETFL) | os.O_NONBLOCK
+    )
+    fcntl(
+        fd_out := pipe.stdout.fileno(), F_SETFL, fcntl(fd_out, F_GETFL) | os.O_NONBLOCK
+    )
+    waiting = [fd_err, fd_out]
+    name = os.path.basename(path)
+    print(f">>> RUN {name} path={path}")
+    started = time.monotonic()
+    while waiting:
+        for fd in select.select(waiting, [], [], timeout)[0]:
+            chunk = os.read(fd, bufsize)
+            if chunk:
+                t: str = time.strftime("%Y-%M-%dT%H:%m:%S")
+                prefix = f"{'   ' if fd == fd_out else '!!!'} "
+                for line in str(chunk, "utf8").split("\n"):
+                    print(f"{prefix}{line}")
+            else:
+                os.close(fd)
+                waiting = [_ for _ in waiting if _ != fd]
+    print(
+        f"<<< path={os.path.relpath(path,'.')} elapsed={time.monotonic() - started:0.3f}s"
+    )
     return TestStatus()
 
 
@@ -158,7 +254,7 @@ if __name__ == "__main__":
     for path in sorted(
         _
         for _ in (os.path.abspath(_) for _ in sys.argv[1:] or glob.glob("tests/*"))
-        if _ != os.path.abspath(__file__)
+        if _ != os.path.abspath(__file__) and _.rsplit(".", 1)[-1] in ("py", "sh")
     ):
         status = run(path)
 
