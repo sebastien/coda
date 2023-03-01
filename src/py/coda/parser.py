@@ -1,112 +1,64 @@
-from .reparser import Marks, Marker, marks
-from .domish import node, toXML
-from typing import NamedTuple, Optional
-from enum import Enum
+from .utils.reparser import Marks, Marker, MarkerEvent, marks, compile
+from .utils.statemachine import StateMachine, CompletionEvent
+from .utils.grammar import grammar
+from .model import StringFragment, Block
+from typing import Iterator
+import re
+
+CODA_START = re.compile(r"^(?P<space>[ \t]*)#[ \t]?--$")
+CODA_COMMENT = re.compile(r"^(?P<space>[ \t]*)#(?P<content>.*)$")
 
 
-class Cardinality(Enum):
-    Optional = 0
-    One = 1
-    Many = 2
-    OneOrMore = 3
-
-
-C = Cardinality
-
-
-class Step(NamedTuple):
-    accepts: Optional[list[str]] = None
-    rejects: Optional[list[str]] = None
-    cardinality: Cardinality = Cardinality.One
-
-
-def matchStep(step: Step, marker: Marker) -> bool:
-    """Matches the given marker with the marker pattern"""
-    if step.rejects and marker.type in step.rejects:
-        return False
-    else:
-        return (not step.accepts) or marker.type in step.accepts
-
-
-def matchSteps(
-    steps: list[Step], markers: list[Marker], start: int = 0
-) -> Optional[list[int]]:
-    """Given a list of marker patterns, tries to match the patterns in sequence
-    so that they match the given markers."""
-    matched: list[int] = [0 for _ in steps]
-    i: int = start
-    j: int = 0
-    n: int = len(markers)
-    m: int = len(steps)
-    has_matched: bool = True
-    # We start from the last marker and the last step. We'll exit
-    # if we've matched all the steps,
-    while i < n and j < m and has_matched:
-        # Wish we had i-- there
-        marker = markers[i]
-        i += 1
-        has_matched = False
-        while j < m:
-            step = steps[j]
-            if matchStep(step, marker):
-                if matched[j] > 0 and step.cardinality.value <= Cardinality.One.value:
-                    # We have already reached our limit of matches, so we need
-                    # to consider this one as a fail.
-                    j += 1
-                    continue
-                else:
-                    # We have a match, we're all good and can get to the next
-                    # marker
-                    matched[j] += 1
-                    has_matched = True
-                    break
-            else:
-                if matched[j] == 0 and step.cardinality in (
-                    Cardinality.One,
-                    Cardinality.OneOrMore,
-                ):
-                    # Here we didn't have a match, and if there was no existing
-                    # match, we'll need to do an early exit.
-                    return None
-                else:
-                    # Otherwise we continue with the next rule.
-                    j += 1
-    return matched
-
-
-python = Marks(
+CODA_BLOCK_MARKS = compile(
+    Marks(
+        {
+            "blockStart": r"^([ \t]*)#[ ]+--[ ]*\n",
+            "comment": r"^([ \t]*)#.*\n",
+            "separator": r"^[ \t]*\n",
+        },
+        {},
+    )
+)
+CODA_BLOCK_GRAMMAR = grammar(
     {
-        "commentStart": r"#\s*\-\-\s*\n",
-        "comment": r"#(?P<text>[^\n]*)\n",
-    },
-    {},
+        "Block": "blockStart comment*",
+        # "Comment": "comment+",
+        # "Sep": "separator+",
+        "Code": "_+",
+    }
 )
 
 
-rules = {
-    "comment": [Step(["commentStart"], None, C.One), Step(["comment"], None, C.Many)],
-    "code": [Step(None, ["commentStart"], C.Many)],
-}
+def blocks(text: str) -> Iterator[Block]:
+    parser: StateMachine = StateMachine(CODA_BLOCK_GRAMMAR)
+    markers: list[Marker] = []
 
-with open("src/py/coda/domish.py", "rt") as f:
-    markers = marks(python, f.read())
-    n = len(markers)
-    i = 0
-    doc = node("document")
-    while i < n:
-        j = i
-        for rule, steps in rules.items():
-            if matched := matchSteps(steps, markers, i):
-                count = sum(matched)
-                j = i + count
-                value = "".join(_.text for _ in markers[i:j])
-                doc.children.append(node(rule, {"value": value}))
-                break
-        if j == i:
-            i += 1
+    def process(markers: list[Marker], event: CompletionEvent) -> Block:
+        start = (
+            markers[event.start].start
+            if event.start < len(markers)
+            else markers[-1].start
+        )
+        end = markers[event.end].start if event.end < len(markers) else markers[-1].end
+        fragment = StringFragment(text, start, end)
+        return Block(event.name or "#text", fragment)
+
+    for marker in marks(text, CODA_BLOCK_MARKS):
+        print("MARKER", marker)
+        if marker.type is MarkerEvent.EOS:
+            if event := parser.end():
+                yield process(markers, event)
         else:
-            i = j
+            markers.append(marker)
+            for event in parser.feed(marker.type):
+                yield process(markers, event)
+    parser.reset()
 
-print(toXML(doc))
+
+if __name__ == "__main__":
+    import sys
+
+    for b in blocks(open(sys.argv[1]).read()):
+        print(b)
 
 # EOF

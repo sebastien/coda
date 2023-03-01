@@ -1,0 +1,33 @@
+# Coda Todo
+
+## Plan
+
+MVP:
+
+[-] Define the data model (blocks, no need for symbol yet)
+[-] Implement a parser to extract basic blocks from a text file with (`# --` or `// --`)
+[-] Implement a renderer to convert the block structure to HTML
+[-] Implement styling to generate a stylesheet
+[X] Implement design tokens to modularise the styling
+
+Text Parser:
+
+[-] Implement the ND (Nota) parser using state machines
+[-] Implement the Nota data model as Blocks/Inlines that can be converted to JSON or HTML
+
+Code Parser:
+
+[-] Implement the Tree Sitter symbol extractor
+[-] Symbol extractor identifies symbol definitions
+[-] Symbol extractor identifies symbol references
+[-] Symbol extractor identifies start and end of definitions
+[-] Extend the data model to support Symbols
+[-] Extend the data model to integrate Sybols and Blocks
+
+## Wishlist
+
+-   Define ordering of blocks
+-   Define a way to attach code and comments to blocks (probably
+    identation)
+
+# EOF
