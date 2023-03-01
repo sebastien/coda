@@ -1,0 +1,3 @@
+[submodule "deps/texto"]
+	path = deps/texto
+	url = git@github.com:sebastien/texto.git
