@@ -1,3 +1,9 @@
 [submodule "deps/texto"]
 	path = deps/texto
 	url = git@github.com:sebastien/texto.git
+[submodule "deps/src/tree-sitter-python"]
+	path = deps/src/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python
+[submodule "deps/tree-sitter-python"]
+	path = deps/tree-sitter-python
+	url = https://github.com/tree-sitter/tree-sitter-python
