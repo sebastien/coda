@@ -1,4 +1,4 @@
-from coda.reparser import Marks, Block, text, iterMarks, compile
+from coda.utils.reparser import Marks, Block, text, iterMarks, compile
 
 BLOCKS = """
 # --
@@ -11,7 +11,6 @@ Line 1
 Line 2
 Line 3
 """
-
 
 
 g = compile(

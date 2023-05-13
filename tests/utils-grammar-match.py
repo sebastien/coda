@@ -1,6 +1,6 @@
 from coda.utils.grammar import grammar
 from coda.utils.statemachine import StateMachine, CompletionEvent, iterPretty
-from harness import hlo, test, same, fail, out
+from harness import hlo, test, same, fail, out, harness
 
 hlo("Checks if tokens trigger rules as expected")
 
@@ -15,7 +15,6 @@ def check(rules: dict[str, str], *inputs: tuple[str, str]) -> bool:
     for _, t in inputs:
         tokens += t.split()
     for i, event in enumerate(machine.run(_ for _ in tokens)):
-        print("EVENT", event)
         if i >= len(inputs):
             return fail(
                 f"Too many parsed blocks, expected {len(inputs)}, got {i + 1}: {event}"
@@ -30,24 +29,49 @@ def check(rules: dict[str, str], *inputs: tuple[str, str]) -> bool:
             j += 1
         else:
             break
-    if j != len(inputs):
+    if j == len(inputs):
+        return True
+    else:
         fail(f"Expected {len(inputs)} match, got {j}")
         out(f" …  {machine}")
         for line in iterPretty(machine.transitions):
             out(f" …  {line}")
-    else:
         return False
 
 
-with test("One rule grammar"):
-    check({"Sep": "sep+"}, ("Sep", "sep"))
-    check({"Sep": "sep+"}, ("Sep", "sep sep"))
-    check({"Sep": "sep+"}, ("Sep", "sep sep sep"))
+with harness(stopOnFail=True):
+    with test("XXXX"):
+        check({"Any": "_+"}, ("Any", "_ _ _"))
 
-with test("One rule, two tokens"):
-    check({"Block": "block comment"}, ("Block", "block comment"))
-    check(g, ("Block", "block"), ("Code", "code"))
-    check(g, ("Block", "block comment"), ("Code", "code"))
+    with test("One rule grammar"):
+        check({"Sep": "sep"}, ("Sep", "sep"))
+        check({"Sep": "sep"}, ("Sep", "sep"), ("Sep", "sep"))
+        check({"Sep": "sep+"}, ("Sep", "sep"))
+        check({"Sep": "sep+"}, ("Sep", "sep sep"))
+        check({"Sep": "sep+"}, ("Sep", "sep sep sep"))
+        check({"Any": "_+"}, ("Any", "_ _ _"))
+
+    with test("One rule, two tokens"):
+        check({"Block": "block comment"}, ("Block", "block comment"))
+        check({"Block": "block comment+"}, ("Block", "block comment comment"))
+        check(
+            {"Block": "block comment+"},
+            ("Block", "block comment comment"),
+            ("Block", "block comment comment"),
+        )
+
+    with test("Many rules, many tokens"):
+        check(
+            {
+                "Block": "block comment+",
+                "Comment": "comment+",
+                "Code": "_+",
+            },
+            ("Block", "block comment"),
+            ("Code", "code"),
+            ("Comment", "comment comment"),
+            ("Code", "code code code"),
+        )
 
 
 # EOF

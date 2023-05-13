@@ -14,7 +14,7 @@ import select
 #
 # A simple RAP-compatible test harness.
 
-TPrimitive = Union[str, bool, int, float, None, list, dict]
+TPrimitive = Union[str, bool, int, float, None, list, dict, tuple]
 
 
 class StopTesting(Exception):
@@ -95,6 +95,7 @@ def fail(message: Union[Exception, str], **data: Any):
         out(f" !  FAIL {message}")
         for k, v in data.items():
             out(f"   {k}={v}")
+        context()
     return record(False)
 
 
@@ -140,27 +141,28 @@ def test(name: str):
         end(status)
 
 
-def context(exception: Exception) -> Exception:
+def context(exception: Optional[Exception] = None) -> Exception:
     """Prints out the context for this exception"""
     path = os.path.abspath(__file__)
-    tb = exception.__traceback__
-    while tb:
-        # if path == frame.f_code.co_filename:
-        frame = tb.tb_frame
-        code = frame.f_code
-        # TODO: This is not super precise, as it only shows the scope, not the line
-        # if we have something like:
-        # ```
-        # with test():
-        #   check()
-        #   check() # The scope will be test() not check()
-        #   check()
-        # ```
-        if frame.f_code.co_filename != path:
-            out(
-                f" …  in {code.co_name + '(…)':15s} at line {frame.f_lineno:4d} in {os.path.relpath(frame.f_code.co_filename, '.')}"
-            )
-        tb = tb.tb_next
+    if exception:
+        tb = exception.__traceback__
+        while tb:
+            # if path == frame.f_code.co_filename:
+            frame = tb.tb_frame
+            code = frame.f_code
+            # TODO: This is not super precise, as it only shows the scope, not the line
+            # if we have something like:
+            # ```
+            # with test():
+            #   check()
+            #   check() # The scope will be test() not check()
+            #   check()
+            # ```
+            if frame.f_code.co_filename != path:
+                out(
+                    f" …  in {code.co_name + '(…)':15s} at line {frame.f_lineno:4d} in {os.path.relpath(frame.f_code.co_filename, '.')}"
+                )
+            tb = tb.tb_next
     return exception
 
 

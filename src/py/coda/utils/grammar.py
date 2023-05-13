@@ -14,7 +14,7 @@ from .statemachine import Transition, Status, TMachine, TAtom
 def seq(*matches: str) -> dict[int, dict[str, Transition]]:
     """Takes a list of token names suffixed by a cardinality `[?+*]` and
     generates a corresponding mapping of state machine states and their
-    map of transitions."""
+    map of transitions. The `_` in a token denotes the wildcard."""
     res: dict[int, dict[str, Transition]] = {0: {}}
     i: int = 0
     j: int = 0
@@ -33,6 +33,8 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
         else:
             name = match
             card = ""
+        # The `_` is an alias to the special character `*`, which we can't
+        # use here.
         name = "*" if name == "_" else name
         # --
         # Now, based on the cardinality we add specific transitions. We
@@ -81,10 +83,17 @@ def seq(*matches: str) -> dict[int, dict[str, Transition]]:
                     res[j] = {
                         name: Transition(j + 1, Status.Partial),
                     }
-                    res[j + 1] = {
-                        name: Transition(j + 1, Status.Partial),
-                        "*": Transition(j + 2, Status.Partial),
-                    }
+                    # We take sepcial treatment for the '*' symbol.
+                    res[j + 1] = (
+                        {
+                            name: Transition(j + 1, Status.Partial),
+                            "*": Transition(j + 2, Status.Partial),
+                        }
+                        if name != "*"
+                        else {
+                            name: Transition(j + 1, Status.Partial),
+                        }
+                    )
                 j += 2
             case "*":
                 if is_last:

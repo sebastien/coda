@@ -1,8 +1,8 @@
-from .utils.reparser import Marks, Marker, MarkerEvent, marks, compile
-from .utils.statemachine import StateMachine, CompletionEvent
-from .utils.grammar import grammar
-from .model import StringFragment, Block
-from typing import Iterator
+from ..utils.reparser import Marks, Marker, MarkerEvent, marks, compile
+from ..utils.statemachine import StateMachine, CompletionEvent
+from ..utils.grammar import grammar
+from ..model import Fragment, Range, Position
+from typing import Iterator, Any
 import re
 
 CODA_START = re.compile(r"^(?P<space>[ \t]*)#[ \t]?--$")
@@ -29,19 +29,19 @@ CODA_BLOCK_GRAMMAR = grammar(
 )
 
 
-def blocks(text: str) -> Iterator[Block]:
+def blocks(text: str) -> Iterator[Any]:
     parser: StateMachine = StateMachine(CODA_BLOCK_GRAMMAR)
     markers: list[Marker] = []
 
-    def process(markers: list[Marker], event: CompletionEvent) -> Block:
+    def process(markers: list[Marker], event: CompletionEvent) -> Any:
         start = (
             markers[event.start].start
             if event.start < len(markers)
             else markers[-1].start
         )
         end = markers[event.end].start if event.end < len(markers) else markers[-1].end
-        fragment = StringFragment(text, start, end)
-        return Block(event.name or "#text", fragment)
+        fragment = Fragment(text, Range(Position(start), Position(end)))
+        return (event.name or "#text", fragment)
 
     for marker in marks(text, CODA_BLOCK_MARKS):
         print("MARKER", marker)

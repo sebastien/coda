@@ -39,4 +39,5 @@ with test("Double token sequences"):
     check("block comment+", "block:0->1P", "comment:1->2C", "comment:2->2C", "*:2->0E")
     check("block comment*", "block:0->1P", "comment:1->2C", "*:1->0E")
 
+print(seq("_+"))
 # EOF
