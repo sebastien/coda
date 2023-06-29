@@ -1,7 +1,7 @@
 from typing import Any, Iterator, Optional
 from importlib import import_module
 from pathlib import Path
-from inspect import ismodule, isclass, ismethod
+from inspect import ismodule, isclass, ismethod, isfunction
 from ..model import Symbol, SymbolType
 
 
@@ -18,9 +18,9 @@ class Introspector:
             return self.onModule(value, scope=scope)
         # elif isclass(value):
         #     return self.onClass(value, scope=scope)
-        # elif ismethod(value):
-        #     return self.onMethod(value, scope=scope)
-        elif callable(value):
+        elif ismethod(value):
+            return self.onFunction(value, scope=scope)
+        elif isfunction(value):
             return self.onFunction(value, scope=scope)
         else:
             return self.onValue(value, scope=scope)
@@ -71,10 +71,12 @@ def module(name: str, recurse: bool = True) -> Iterator[Symbol]:
             if path
             else ()
         ):
-            yield from module(f"{name}.{child}")
+            return module(f"{name}.{child}")
 
+
+from ..utils.json import asJSON
 
 if __name__ == "__main__":
     for _ in module("basekit"):
-        print(_)
+        print(asJSON(_))
 # EOF

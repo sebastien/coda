@@ -46,5 +46,8 @@ check-strict:
 		echo "EOS OK $$summary"
 	fi
 
+run:
+	python -m http.server
+
 .ONESHELL:
 # EOF
