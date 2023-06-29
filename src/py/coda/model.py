@@ -18,8 +18,9 @@ class SymbolType(Enum):
     Module = "module"
     Function = "function"
     Class = "object"
-    Object = "object"
     Slot = "slot"
+    Object = "object"
+    Value = "value"
 
 
 # TODO: Not sure if we should have a scope type
