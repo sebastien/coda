@@ -17,58 +17,78 @@ class Introspector:
         module = import_module(name)
         return self.onModule(module, introspect=True)
 
-    def process(self, value: Any, scope: Optional[str] = None) -> Symbol:
-        if ismodule(value):
-            return self.onModule(value, scope=scope)
-        # elif isclass(value):
-        #     return self.onClass(value, scope=scope)
-        elif ismethod(value):
-            return self.onFunction(value, scope=scope)
-        elif isfunction(value):
-            return self.onFunction(value, scope=scope)
-        else:
-            return self.onValue(value, scope=scope)
-
-    def onModule(
-        self, value: Any, scope: Optional[str] = None, introspect: bool = False
+    def process(
+        self, value: Any, scope: Optional[str] = None, slot: Optional[str] = None
     ) -> Symbol:
-        qualname = f"{scope}.{value.__name__}" if scope else value.__name__
-        symbol: Symbol = Symbol(qualname, SymbolType.Module, parent=scope)
+        if ismodule(value):
+            return self.onModule(value, scope=scope, slot=slot)
+        elif isclass(value):
+            return self.onClass(value, scope=scope, slot=slot)
+        elif ismethod(value):
+            return self.onFunction(value, scope=scope, slot=slot)
+        elif isfunction(value):
+            return self.onFunction(value, scope=scope, slot=slot)
+        else:
+            return self.onValue(value, scope=scope, slot=slot)
+
+    # TODO: We should determine if the value is references (ie `from enum import Enum`)
+    # or defined there.
+    def onModule(
+        self,
+        value: Any,
+        scope: Optional[str] = None,
+        slot: Optional[str] = None,
+        introspect: bool = False,
+    ) -> Symbol:
+        qualname = value.__name__
+        names = qualname.split(".")
+        parent = ".".join(names[:-1]) if len(names) > 1 else None
+        name = names[-1]
+        symbol: Symbol = Symbol(name, SymbolType.Module, parent=parent)
         if introspect:
-            for slot in value.__dict__:
-                if child := getattr(value, slot):
-                    symbol.slots[slot] = self.process(child, scope=qualname).qualname
+            for slot, child in value.__dict__.items():
+                symbol.slots[slot] = self.process(
+                    child, scope=qualname, slot=slot
+                ).qualname
         return self.register(symbol)
 
-    # def onClass(self, value: Any, scope: Optional[str] = None) -> Iterator[Symbol]:
-    #     name = value.__name__
-    #     qualname = f"{scope}.{name}" if scope else name
-    #     symbol: Symbol = Symbol(qualname, SymbolType.Class)
-    #     for slot in value.__dict__:
-    #         if child := getattr(value, slot):
-    #             yield from self.process(child, scope=qualname)
-    #             symbol.slots[slot] = f"{qualname}.{slot}"
-    #     yield symbol
+    def onClass(
+        self, value: Any, scope: Optional[str] = None, slot: Optional[str] = None
+    ) -> Symbol:
+        name = value.__name__
+        qualname = f"{scope}.{name}" if scope else name
+        symbol: Symbol = Symbol(qualname, SymbolType.Class)
+        for slot, child in value.__dict__.items():
+            symbol.slots[slot] = self.process(child, scope=qualname, slot=slot).qualname
+        return self.register(symbol)
 
     # def onMethod(self, value: Any, scope: Optional[str] = None) -> Iterator[Symbol]:
     #     name = value.__name__
     #     qualname = f"{scope}.{name}" if scope else name
     #     yield Symbol(qualname, SymbolType.Function, scope=scope)
 
-    def onFunction(self, value: Any, scope: Optional[str] = None) -> Symbol:
+    def onFunction(
+        self, value: Any, scope: Optional[str] = None, slot: Optional[str] = None
+    ) -> Symbol:
         name = value.__name__
         return self.register(Symbol(name, SymbolType.Function, parent=scope))
 
-    def onValue(self, value: Any, scope: Optional[str] = None) -> Symbol:
-        return self.register(Symbol("#value", SymbolType.Value, parent=scope))
+    def onValue(
+        self, value: Any, scope: Optional[str] = None, slot: Optional[str] = None
+    ) -> Symbol:
+        return self.register(Symbol(slot or "#value", SymbolType.Value, parent=scope))
+
+    def asDict(self):
+        return self.symbols
 
 
 def submodules(name: str) -> Iterator[str]:
     """List the submodules of the given module, including the module itself"""
     module = None
     try:
+        # Module import can fail, and that's OK
         module = import_module(name)
-    except Exception as e:
+    except Exception:
         pass
     if module:
         path = Path(module.__file__)
@@ -97,5 +117,6 @@ if __name__ == "__main__":
         introspector.module(_)
     for _ in introspector.symbols.values():
         print(_.qualname)
-    #     # print(asJSON(_))
+    with open("coda-api.json", "wt") as f:
+        f.write(asJSON(introspector))
 # EOF
