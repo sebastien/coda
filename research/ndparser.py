@@ -47,8 +47,8 @@ class Dual(NamedTuple):
 
 
 class Inline(NamedTuple):
-    start: str
-    end: str
+    start: re.Pattern[str]
+    end: Optional[re.Pattern[str]]
 
 
 class Prefix(NamedTuple):
@@ -70,8 +70,11 @@ class Grammar(NamedTuple):
     inlines: dict[str, Inline]
 
 
-def inline(start: str, end: Optional[str] = None):
-    return Inline(start, end or start)
+def inline(start: str | re.Pattern[str], end: Optional[str | re.Pattern[str]] = None):
+    return Inline(
+        start=re.compile(re.escape(start)) if isinstance(start, str) else start,
+        end=re.compile(re.escape(end)) if isinstance(end, str) else end,
+    )
 
 
 def prefix(start: Optional[str] = None, indented: bool = False):
@@ -94,18 +97,32 @@ def grammar(
 
 # Here we want to match anything like `_*`code`*_`
 with declared() as Inlines:
+    Strong = inline("**")
     Emphasis = inline("*")
     Term = inline("_")
     Code = inline("`")
+    Quote = inline("<<", ">>")
+    Link = inline("[", re.compile(r"\)\[(?P<target>[^\]]*)\]"))
     Anchor = inline("[", "]")
-    Link = inline("(", ")")
+
+with declared() as Microformats:
+    Tag = inline(re.compile(r"#(?P<name>[\w\d\-_]+)"))
+    Ref = inline(re.compile(r"#{(?P<name>[^}]+)}"))
+    Email = inline(re.compile(r"\<(?P<email>[\w.\-_]+@[\w.\-_]+)\>"))
+    URL = inline(re.compile(r"\<(?P<url>[A-z]+://[^\>]+)\>"))
+
+# TODO: Microformats
+# TODO: #URLs
+# TODO: #TAG
+# TODO: #{Reference}
+# TODO: ISO DATE
 
 
 with declared() as Prefixes:
-    TodoItem = prefix(r"-[ ]*\[(?P<state>[ xX])\]", indented=True)
-    OrderedListItem = prefix(r"(?P<number>[0-9a-zA-Z])[\)\.]", indented=True)
-    DefinitionItem = prefix(r"-[ ]*(?P<term>)::$", indented=True)
-    UnorderedListItem = prefix("-", indented=True)
+    TodoItem = prefix(r"-[ ]*\[(?P<state>[ xX])\][ ]*", indented=True)
+    OrderedListItem = prefix(r"(?P<number>[0-9a-zA-Z])[\)\.][ ]*", indented=True)
+    UnorderedListItem = prefix("(?P<bullet>[-*])[ ]*", indented=True)
+    DefinitionItem = prefix(r"-[ ]*(?P<term>([^:]|:[^:])+)::[ ]*$", indented=True)
     Fence = prefix(r"```(\s(?P<lang>.+))*$")
     Meta = prefix("--")
     Title = prefix("==+")
@@ -152,6 +169,50 @@ class MatchedBlock(NamedTuple):
     end: Optional[re.Match[str]] = None
 
 
+def parseInlines(
+    line: str,
+    inlines: dict[str, Inline] = Microformats | Inlines,
+    *,
+    start: int = 0,
+    end: Optional[int] = None,
+):
+    o: int = start
+    n: int = end or len(line)
+    while o < n:
+        i: int = n
+        # We iterate on the active parsers
+        starts: dict[str, re.Match[str]] = {}
+        ends: dict[str, re.Match[str]] = {}
+        for k, v in inlines.items():
+            if v.end and (m := v.start.search(line, o)):
+                # This expects an end
+                starts[k] = m
+                if (e := v.end.search(line, m.end())) and (e and e.end() <= n):
+                    # If we've found the end then we register the end
+                    ends[k] = e
+                else:
+                    # No end match, the parser becomes inactive
+                    pass
+        closest: Optional[str] = None
+        for k, e in ends.items():
+            if (j := starts[k].start()) < i:
+                closest = k
+                i = j
+        if closest:
+            yield [
+                closest,
+                list(
+                    parseInlines(
+                        line, inlines, start=starts[k].end(), end=ends[closest].start()
+                    )
+                ),
+            ]
+            o = ends[closest].end() + 1
+        else:
+            yield line[start:n]
+            o = n + 1
+
+
 def parseBlocks(
     input: Iterator[str],
     blocks: dict[str, Block | Line] = Lines | Blocks,
@@ -160,6 +221,8 @@ def parseBlocks(
     cur: Optional[MatchedBlock] = None
     for line in input:
         if cur and cur.block and isinstance(cur.block, Block) and cur.block.end:
+            # The current block is an explicit block, so we end the block
+            # when the end matches.
             if m := cur.block.end.text.match(line):
                 # TODO: Maybe we should post-process the block
                 cur.lines.append(line)
@@ -182,6 +245,8 @@ def parseBlocks(
                         yield matched
                         cur = None
                     break
+            # If we haven't found a matched block, then we either create
+            # a new text block or append to the current one.
             if not matched:
                 if not cur or cur.name != "":
                     if cur:
@@ -193,13 +258,13 @@ def parseBlocks(
         yield cur
 
 
-RE_EMPTY = re.compile("^[ \t]*$")
-
-
-def trimlines(lines: list[str]) -> list[str]:
-    while lines and RE_EMPTY.match(lines[0]):
+def trimlines(
+    lines: list[str], empty: re.Pattern[str] = re.compile("^[ \t]*$")
+) -> list[str]:
+    """Trim start and endint lines that are empty."""
+    while lines and empty.match(lines[0]):
         lines.pop(0)
-    while lines and RE_EMPTY.match(lines[-1]):
+    while lines and empty.match(lines[-1]):
         lines.pop()
     return lines
 
@@ -209,21 +274,26 @@ EOL = "\n"
 
 def parseLines(input: Iterator[str]):
     for b in parseBlocks(input):
-        if b.name:
-            if isinstance(b.block, Block):
-                yield (
-                    f"<{b.name}>{''.join(b.lines)[len(b.start.group()) if b.start else 0:-(len(b.end.group())+1 if b.end else 0)].strip(EOL)}</{b.name}>"
-                )
-            elif isinstance(b.block, Line):
-                yield f"<{b.name}>{''.join(b.lines)[len(b.start.group()) if b.start else 0:].strip()}</{b.name}>"
-        else:
-            yield f"<p>{''.join(trimlines(b.lines))}</p>"
+        for _ in parseInlines("".join(b.lines)):
+            yield _
+        # if b.name:
+        #     if isinstance(b.block, Block):
+        #         yield (
+        #             f"<{b.name}>{''.join(b.lines)[len(b.start.group()) if b.start else 0:(0 - len(b.end.group()) if b.end else None)].strip(EOL)}</{b.name}>"
+        #         )
+        #     elif isinstance(b.block, Line):
+        #         yield f"<{b.name}>{''.join(b.lines)[len(b.start.group()) if b.start else 0:].strip()}</{b.name}>"
+        # else:
+        #     yield f"<p>{''.join(trimlines(b.lines))}</p>"
 
 
 # --
 # ## Parsing passes
-with open("pouet.txt") as f:
-    for _ in parseLines(f.readlines()):
-        print(_)
+import sys
+
+for arg in sys.argv[1:] or ("pouet.txt",):
+    with open(arg) as f:
+        for _ in parseLines(f.readlines()):
+            print(_)
 
 # EOF
