@@ -17,7 +17,15 @@
 			<slot template="Tree" items="(fetch('data/files.json').then(_=>_.json()))"
 				debug-items="([{label:'A',children:[{label:'B0',children:[{label:'C0'}]},{label:'B1'}]}])" />
 		</div>
+		<div class="stack w-2col bd shadow-2 rounded shadow-left shadow-8 bg-3 pad-4 scroll-v">
+			<slot template="Tree" items="(fetch('data/symbols.json').then(_=>_.json()))"
+				debug-items="([{label:'A',children:[{label:'B0',children:[{label:'C0'}]},{label:'B1'}]}])" />
+		</div>
+
 	</div>
+	<!--
+	TODO: it's probably best to have a flat list of modules instead of a file-
+	based hierarchy -->
 	<!-- ------------------------------------------------------------------
 
 		TREE
@@ -35,7 +43,8 @@
 		NODE
 
 		------------------------------------------------------------------- -->
-	<template name="Node" in:item inout:is-expanded="true" out:label="${item->{item.value?.name||`Item ${item.id}`}}">
+	<template name="Node" in:item inout:is-expanded="true"
+		out:label="${item->{item.value?.file?.name || item.value?.name ||`Item ${item.id}`}}">
 		<li x:match="children=item.children">
 			<slot x:when="{children?.length}">
 				<div class="row item middle selectable pad-2" on:click="!Toggle.">
@@ -67,6 +76,7 @@
 		const Node = ({use, on, scope}) => {
 			const isExpanded = use.local("isExpanded", true);
 			on.Toggle((event) => {
+				console.log("TOGGLE", event)
 				isExpanded.set(!isExpanded.value);
 			});
 		};

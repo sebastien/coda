@@ -1,6 +1,6 @@
 from tree_sitter import Language, Node, Tree, Parser
 from pathlib import Path
-from typing import Optional, Generator
+from typing import Optional, Generator, Any
 import os
 
 # TODO: Given an instruction to swallow children, for instance
@@ -86,15 +86,15 @@ class Processor:
         """Called on node"""
         print(f"node:{node.type} {depth}+{breadth}")
 
-    def on_start(self):
+    def on_start(self, tree, source, meta):
         """Called on parsing start"""
         pass
 
-    def on_end(self):
+    def on_end(self, tree, source, meta):
         """Called on parsing end"""
         pass
 
-    def process(self, tree: Tree, source: bytes):
+    def process(self, tree: Tree, source: bytes, meta: Any | None = None):
         """Processes the given Treesitter Tree, parsed off the given
         `source`."""
 
@@ -105,7 +105,7 @@ class Processor:
         visited = set()
         on_exit = {}
         # NOTE: Not sure if we should call init there
-        self.on_start()
+        self.on_start(tree, source, meta)
         # This implements a depth-first traversal of the tree
         while True:
             node = cursor.node
@@ -158,8 +158,11 @@ class Processor:
                             break
                     if node_key(cursor.node) not in visited:
                         break
+                # FIXME: I'm not sure why this is the exit condition?
                 if node_key(cursor.node) in visited:
-                    return self.on_end()
+                    while self.depth > 0:
+                        self.pop()
+                    return self.on_end(tree, source, meta)
 
 
 # --
@@ -207,14 +210,9 @@ class StructureProcessor(Processor):
         #   A,B = (10, 20)
         name_node = node.child_by_field_name("left")
         name = self.text(name_node) if name_node else None
-        print(f"{'    ' * self.depth}=   {name}")
-        # self.scope = self.scope.derive(
-        #     type=type, range=(node.start_byte, node.end_byte), name=name
-        # )
 
         def on_exit(_, self=self):
             pass
-            # self.scope = self.scope.parent
 
         return on_exit
 
@@ -223,37 +221,21 @@ class StructureProcessor(Processor):
     ):
         name_node = node.child_by_field_name("name")
         name = self.text(name_node) if name_node else None
-        print(f"{'    ' * self.depth}DEF {name}")
-        # self.scope = self.scope.derive(
-        #     type=type, range=(node.start_byte, node.end_byte), name=name
-        # )
         self.mode = "def"
-        self.depth += 1
+        self.push()
 
-        def on_exit(_, self=self):
-            # self.scope = self.scope.parent
-            self.depth -= 1
-            pass
-
-        return on_exit
+        return self.pop
 
     def on_attribute(self, node: Node, value: str, depth: int, breadth: int):
-        # FIXME: Not sure this is what I think it is, ie:
-        #         ATT StructureProcessor().process
         pass
-        # print(f"{'    ' * self.depth}ATT {self.text(node)}")
-        # self.push()
-        # return self.pop
 
     def on_type(self, node: Node, value: str, depth: int, breadth: int):
-        print(f"{'    ' * self.depth}TYP {self.text(node)}")
+        pass
 
     # --
     # ### References
     def on_identifier(self, node: Node, value: str, depth: int, breadth: int):
-        print(
-            f"{'    ' * self.depth}{'=  ' if self.mode == 'def' else '@  '} {self.text(node)}"
-        )
+        pass
         # if value not in self.scope.slots:
         #     if self.mode == "ref":
         #         self.scope.refs[value] = self.mode
@@ -288,22 +270,21 @@ class StructureProcessor(Processor):
         mode = self.mode
         self.mode = "ref"
 
-        print(f"{'    ' * self.depth}-   {self.text(node)}")
-        self.depth += 1
+        self.push()
 
         def on_exit(_):
             self.mode = mode
-            self.depth -= 1
+            self.pop()
 
         return on_exit
 
     def on_argument_list(self, node: Node, value: str, depth: int, breadth: int):
         self.push()
-        return lambda _: self.pop()
+        return self.pop
 
     def on_string(self, node: Node, value: str, depth: int, breadth: int):
         self.push()
-        return lambda _: self.pop()
+        return self.pop
 
     def on_binary_operator(self, node: Node, value: str, depth: int, breadth: int):
         mode = self.mode
@@ -315,21 +296,20 @@ class StructureProcessor(Processor):
         return on_exit
 
     def on_call(self, node: str, value: str, depth: int, breadth: int):
-        print(f"{'    ' * self.depth}:invocation")
         self.push()
         return self.pop
 
     def on_paren_open(self, node: str, value: str, depth: int, breadth: int):
-        print(f"{'    ' * self.depth}:list")
         self.mode = "ref"
         self.push()
+        # NOTE: No pop required yet
 
     def on_paren_close(self, node: str, value: str, depth: int, breadth: int):
         self.pop()
 
     def on_dot(self, node: str, value: str, depth: int, breadth: int):
         # NOTE: This one is weird, as it does not contain a child
-        print(f"{'    ' * self.depth}:resolve")
+        pass
 
     def on_comma(self, node: str, value: str, depth: int, breadth: int):
         pass
@@ -338,21 +318,21 @@ class StructureProcessor(Processor):
         self.mode = "ref"
 
     def on_node(self, node: str, value: str, depth: int, breadth: int):
-        print(f"{'    ' * self.depth}-   {node}")
         pass
 
 
 # --
 # ## Main
 
-languages = getLanguages()
-parser = Parser()
-parser.language = languages["python"]
-open_path = Path(__file__)
-open_path = "research/treesitter-extractor.py"
-with open(open_path, "rb") as f:
-    text = f.read()
-    tree = parser.parse(text)
+if __name__ == "__main__":
+    languages = getLanguages()
+    parser = Parser()
+    parser.language = languages["python"]
+    open_path = Path(__file__)
+    open_path = "research/treesitter-extractor.py"
+    with open(open_path, "rb") as f:
+        text = f.read()
+        tree = parser.parse(text)
 
-StructureProcessor().process(tree, text)
+    StructureProcessor().process(tree, text)
 # EOF
