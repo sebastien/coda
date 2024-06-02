@@ -1,6 +1,6 @@
 from tree_sitter import Language, Node, Tree, Parser
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Generator
 import os
 
 # TODO: Given an instruction to swallow children, for instance
@@ -30,23 +30,19 @@ BASE = Path(__file__).parent
 REPOS = Path(__file__).parent.parent.parent.parent / ".deps/src"
 
 
-def getLanguages(
-    path: Optional[Path] = None, repos: Optional[Path] = None
-) -> dict[str, Language]:
+def getLanguages() -> dict[str, Language]:
     """Returns a map of available TreeSitter languages"""
-    lib_path = str(path or BASE / "treesitter-languages.so")
-    repo_base = repos or REPOS
-    langs = [
-        _.split("-", 3)[2]
-        for _ in os.listdir(repo_base)
-        if _.startswith("tree-sitter-")
-    ]
-    Language.build_library(
-        # Store the library in the `build` directory
-        str(lib_path),
-        [str(repo_base / f"tree-sitter-{lang}") for lang in langs],
-    )
-    return {lang: Language(lib_path, lang) for lang in langs}
+    res: dict[str, Language] = {}
+    for l in ["python", "javascript"]:
+        match l:
+            case "python":
+                import tree_sitter_python as lang
+            case "javascript":
+                import tree_sitter_javascript as lang
+            case _:
+                raise ValueError(f"Unsupported language: {l}")
+        res[l] = Language(lang.language())
+    return res
 
 
 # --
@@ -204,7 +200,7 @@ class StructureProcessor(Processor):
         return self.on_definition(node, value, depth, breadth, "class")
 
     def on_assignment(self, node: Node, value: str, depth: int, breadth: int):
-        # TODO: We're not handling the asssignment properly, ie.
+        # TODO: We're not handling the assignment properly, ie.
         # class A:
         #   STATIC = 1
         #   SOMEVAR[1] = 10
@@ -351,9 +347,9 @@ class StructureProcessor(Processor):
 
 languages = getLanguages()
 parser = Parser()
-parser.set_language(languages["python"])
+parser.language = languages["python"]
 open_path = Path(__file__)
-open_path = "test.py"
+open_path = "research/treesitter-extractor.py"
 with open(open_path, "rb") as f:
     text = f.read()
     tree = parser.parse(text)

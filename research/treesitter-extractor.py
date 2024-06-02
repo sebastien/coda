@@ -94,12 +94,24 @@ class TreeSitter:
     ) -> dict[str, Language]:
         """Returns a map of available TreeSitter languages"""
         lib_path = str(path or cls.PATH_BASE / "treesitter-languages.so")
-        Language.build_library(
-            # Store the library in the `build` directory
-            str(lib_path),
-            [str(cls.Install(_)) for _ in languages],
-        )
-        return {lang: Language(lib_path, lang) for lang in languages}
+
+        # NOTE: Not required anymore
+        # Language.build_library(
+        #     # Store the library in the `build` directory
+        #     str(lib_path),
+        #     [str(cls.Install(_)) for _ in languages],
+        # )
+        res: dict[str, Language] = {}
+        for l in languages:
+            match l:
+                case "python":
+                    import tree_sitter_python as lang
+                case "javascript":
+                    import tree_sitter_javacript as lang
+                case _:
+                    raise ValueError(f"Unsupported language: {l}")
+            res[l] = Language(lang.language())
+        return res
 
 
 class TreeSitterText:
@@ -118,6 +130,11 @@ class TreeSitterText:
         return Fragment(self.value, self.offsets[sl] + so, self.offsets[el] + eo)
 
 
+def walk(tree):
+    for cur in tree.walk():
+        print(cur)
+
+
 if __name__ == "__main__":
     langs = TreeSitter.Languages("python")
 
@@ -133,39 +150,40 @@ if __name__ == "__main__":
         py = langs["python"]
         parser: Parser = Parser()
         text = TreeSitterText(f.read())
-        parser.set_language(py)
+        parser.language = py
         tree = parser.parse(text.value)
-        # --
-        # These are Tree Sitter queries
-        for t, q in (
-            ("def", "(function_definition name: (identifier) @name)"),
-            ("def", "(class_definition name: (identifier) @name)"),
-            ("def", "(parameter name: (identifier) @name)"),
-            # ("def",  "(attribute name: (identifier) @name)"),  # Attribute reference
-            # ("def",  "(object name: (identifier) @name)"),  # Object reference
-            ("asn", "(assignment left: (identifier) @name )"),  # Object reference
-        ):
-            query = py.query(q)
-            res = query.captures(tree.root_node)
-            for match, var in res:
-                # i, oi = match.start_point
-                # j, oj = match.end_point
-                # if i == j:
-                #     t = lines[i][oi:oj]
-                # else:
-                #     t = lines[i + 1 : j - 1]
-                #     t.insert(0, lines[i][oi:])
-                #     t.append(lines[j][:oj])
-
-                frag = text.fragment(match.start_point, match.end_point)
-                name = frag.value
-
-                # TODO: We need to identify the scope
-                sym = ensure_symbol(name)
-                mention = SymbolMention(t, sym, frag)
-                sym.mentions.append(mention)
-    for s in symbols.values():
-        print(s)
+        walk(tree)
+#         # --
+#         # These are Tree Sitter queries
+#         for t, q in (
+#             ("def", "(function_definition name: (identifier) @name)"),
+#             ("def", "(class_definition name: (identifier) @name)"),
+#             ("def", "(parameter name: (identifier) @name)"),
+#             # ("def",  "(attribute name: (identifier) @name)"),  # Attribute reference
+#             # ("def",  "(object name: (identifier) @name)"),  # Object reference
+#             ("asn", "(assignment left: (identifier) @name )"),  # Object reference
+#         ):
+#             query = py.query(q)
+#             res = query.captures(tree.root_node)
+#             for match, var in res:
+#                 # i, oi = match.start_point
+#                 # j, oj = match.end_point
+#                 # if i == j:
+#                 #     t = lines[i][oi:oj]
+#                 # else:
+#                 #     t = lines[i + 1 : j - 1]
+#                 #     t.insert(0, lines[i][oi:])
+#                 #     t.append(lines[j][:oj])
+#
+#                 frag = text.fragment(match.start_point, match.end_point)
+#                 name = frag.value
+#
+#                 # TODO: We need to identify the scope
+#                 sym = ensure_symbol(name)
+#                 mention = SymbolMention(t, sym, frag)
+#                 sym.mentions.append(mention)
+#     for s in symbols.values():
+#         print(s)
 
 
 # EOF
