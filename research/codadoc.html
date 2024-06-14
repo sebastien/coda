@@ -13,19 +13,38 @@
 
 <body>
 	<div class="row fit-screen stretched lined nogap">
-		<div class="stack w-2col bd shadow-2 rounded shadow-left shadow-8 bg-3 pad-4 scroll-v">
-			<slot template="Tree" items="(fetch('data/files.json').then(_=>_.json()))"
-				debug-items="([{label:'A',children:[{label:'B0',children:[{label:'C0'}]},{label:'B1'}]}])" />
+		<!--
+		<div class="stack w-2col bd shadow-2 rounded shadow-left shadow-8 bg-3 pad-4 scroll-v"> <slot template="Tree" items="(fetch('data/files.json').then(_=>_.json()))"></slot>
 		</div>
 		<div class="stack w-2col bd shadow-2 rounded shadow-left shadow-8 bg-3 pad-4 scroll-v">
-			<slot template="Tree" items="(fetch('data/symbols.json').then(_=>_.json()))"
-				debug-items="([{label:'A',children:[{label:'B0',children:[{label:'C0'}]},{label:'B1'}]}])" />
+			<slot template="Tree" items="(fetch('data/symbols.json').then(_=>_.json()))"></slot>
 		</div>
+		-->
+		<div class="stack w-2col bd shadow-2 rounded shadow-left shadow-8 bg-3 pad-4 scroll-v">
+			<slot template="List" items="(fetch('data/symbols.json').then(_=>_.json()))"></slot>
+		</div>
+
+
 
 	</div>
 	<!--
 	TODO: it's probably best to have a flat list of modules instead of a file-
 	based hierarchy -->
+	<!-- ------------------------------------------------------------------
+
+		LIST
+
+		------------------------------------------------------------------- -->
+	<template name="List" in:items>
+		<div class="stack fill lined fit-h indent-icon">
+			<ul class="stack" x:for="item=items">
+				<li>
+					<span out:label="item->{item.value?.file?.name || item.value?.name ||`Item ${item.id}`}"></span>
+				</li>
+			</ul>
+		</div>
+	</template>
+
 	<!-- ------------------------------------------------------------------
 
 		TREE

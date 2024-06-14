@@ -79,7 +79,7 @@ class Processor(StructureProcessor):
             Symbol(
                 meta.name,
                 parent=None,
-                name=meta,
+                name=meta.name,
                 type="module",
                 fragment=Fragment(meta.path, 0, len(source)),
             ),
