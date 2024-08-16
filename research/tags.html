@@ -10,12 +10,7 @@
 
 <body>
 
-	<div>
-		<p name="description">Illustrates how the component <code>mount</code> and
-			<code>unmount</code> events can be used to trigger effects.
-		</p>
-		<div id="Items">
-		</div>
+	<div id="Items" class="fit-screen">
 	</div>
 	<script type="module">
 		import {render} from "@ui/client.js"
@@ -49,14 +44,14 @@
 		}
 
 		const Panels = ({panels, selection = []}) => {
-			return ul({_: "row"},
-				panels.map((items, index) => li(h(Items, {items, index}))))
+			return ul({_: "row fit-h"},
+				panels.map((items, index) => {console.log("PANEL", {index, items}); return li({_: "fit-h scrollable"}, h(Items, {items, index}))}))
 		}
 
 		const tags = await fetch("tags.json").then(_ => _.json())
 		const groups = grouped(tags, "type");
 		const items = keys(groups).map(_ => ({label: _}))
-		render(Items, {panels: [items]}, document.getElementById("Items"))
+		render(Panels, {panels: [items, tags]}, document.getElementById("Items"))
 
 	</script>
 </body>
