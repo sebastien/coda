@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<link rel="stylesheet" href="https://cdn.statically.io/gh/sebastien/ui.js/main/src/css/ui.css" />
+	<script type="importmap">{"imports":{"@ui/": "../ref-uijs/src/js/ui-faster/"}}</script>
+</head>
+
+<body>
+
+	<div>
+		<p name="description">Illustrates how the component <code>mount</code> and
+			<code>unmount</code> events can be used to trigger effects.
+		</p>
+		<div id="Items">
+		</div>
+	</div>
+	<script type="module">
+		import {render} from "@ui/client.js"
+		import {h, $} from "@ui/hyperscript.js"
+		import {grouped, keys} from "@ui/utils/collections.js"
+		const {table, thead, tbody, tfoot, th, tr, td, button, div, span, ul, li, code} = h;
+
+		const Item = ({item: {label}, index}) => {
+			return div({
+				_: "with-hover row pt-1 pb-1",
+			},
+				span({_: "pill smaller upper"}, index),
+				label,
+			)
+		}
+
+		const Symbol = ({item: {symbol, type, fragment}, index}) => {
+			return div({
+				_: "with-hover row pt-1 pb-1",
+			},
+				span({_: "pill smaller upper"}, type),
+				code(symbol),
+			)
+		}
+
+		const Items = ({mounted, items, count = 0}) => {
+			return ul({_: "padded lined w-4b"},
+				items.map((item, index) => li({_: "selectable item"}, h(
+					item.apply(_ => _?.symbol ? Symbol : Item)
+					, {item, index}))))
+		}
+
+		const Panels = ({panels, selection = []}) => {
+			return ul({_: "row"},
+				panels.map((items, index) => li(h(Items, {items, index}))))
+		}
+
+		const tags = await fetch("tags.json").then(_ => _.json())
+		const groups = grouped(tags, "type");
+		const items = keys(groups).map(_ => ({label: _}))
+		render(Items, {panels: [items]}, document.getElementById("Items"))
+
+	</script>
+</body>
+
+</html>
