@@ -122,6 +122,8 @@ def parseCTags(
         symbol, path, pattern = line.split("\t", 2)
         pattern, t = pattern.strip("\n").rsplit("\t", 1)
         # TODO: We could source the location from the path and regexp
+        # TODO: We sometimes have extra info, so we should probably split by \t/^ and then /;"
+        # ASSETS	./.deps/src/build-kit/src/py/buildkit/commands/package.py	/^    ASSETS = {$/;"	v	class:Package
         stype: SymbolType | None = next((_ for _ in SymbolType if _.value == t), None)
         # TODO: Should probably warn if there's a problem
         yield TagEntry(

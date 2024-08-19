@@ -48,7 +48,7 @@
 				panels.map((items, index) => {console.log("PANEL", {index, items}); return li({_: "fit-h scrollable"}, h(Items, {items, index}))}))
 		}
 
-		const tags = await fetch("tags.json").then(_ => _.json())
+		const tags = await fetch("tag-2.json").then(_ => _.json())
 		const groups = grouped(tags, "type");
 		const items = keys(groups).map(_ => ({label: _}))
 		render(Panels, {panels: [items, tags]}, document.getElementById("Items"))
