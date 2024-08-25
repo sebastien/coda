@@ -18,7 +18,7 @@
 		import {grouped, keys} from "@ui/utils/collections.js"
 		const {table, thead, tbody, tfoot, th, tr, td, button, div, span, ul, li, code} = h;
 
-		const Item = ({item: {label}, index}) => {
+		const Item = ({item: {label}, index, selection}) => {
 			return div({
 				_: "with-hover row pt-1 pb-1",
 			},
@@ -36,22 +36,39 @@
 			)
 		}
 
-		const Items = ({mounted, items, count = 0}) => {
+		const Items = ({mounted, items, count = 0, selection}) => {
 			return ul({_: "padded lined w-4b"},
-				items.map((item, index) => li({_: "selectable item"}, h(
-					item.apply(_ => _?.symbol ? Symbol : Item)
-					, {item, index}))))
+				li(code(selection.text(_ => JSON.stringify(_)))),
+				items.map((item, index) => li(
+					{
+						_: "selectable item",
+						onClick: _ => selection.toggle(item.value),
+						["data-selected"]: $(item, selection).apply((i, s) => {
+							console.log("SELECTED?", i, s)
+							return s !== undefined && i === s ? true : null
+						}),
+					}, h(
+						item.apply(_ => _?.symbol ? Symbol : Item)
+						, {item, index, selection}))))
 		}
 
-		const Panels = ({panels, selection = []}) => {
+		const Panels = ({panels, selection = "POUET"}) => {
 			return ul({_: "row fit-h"},
-				panels.map((items, index) => {console.log("PANEL", {index, items}); return li({_: "fit-h scrollable"}, h(Items, {items, index}))}))
+				li(code(selection.text(_ => JSON.stringify(_)))),
+				panels.map((items, index) =>
+					li({_: "fit-h scrollable"}, h(Items, {
+						items, index, selection: $.cell(selection, _ => {
+							selection.at(index.value, _)
+							console.log("UPDATED SELECTION", selection.value)
+						}, _ => _[index.value])
+					}))
+				))
 		}
 
-		const tags = await fetch("tags.json").then(_ => _.json())
+		const tags = (await fetch("tags.json").then(_ => _.json())).slice(0, 2)
 		const groups = grouped(tags, "type");
 		const items = keys(groups).map(_ => ({label: _}))
-		render(Panels, {panels: [items, tags]}, document.getElementById("Items"))
+		render(Panels, {panels: [items, tags], selection: "KAPOUET"}, document.getElementById("Items"))
 
 	</script>
 </body>
