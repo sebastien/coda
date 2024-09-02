@@ -81,6 +81,7 @@ class BlockParser:
             cur = line
 
 
+# TODO: Given a code block, find the symbols defined
 if __name__ == "__main__":
     import sys
 

@@ -16,6 +16,111 @@ class Fragment(NamedTuple):
     text: str | None = None
 
 
+# Attributes
+"""
+Constant
+"""
+
+# Types
+
+# TODO: Semantically we should have two things:
+# - Reference
+# - Definition
+#
+# and then Symbols which are things that have name. Values are things with
+# no name, that can be bound to a name (symbol).
+#
+# Some things are logical, ie. they have a label (human readable description),
+# but not a name.
+"""
+Symbol
+    Variable
+        Global
+        Local
+    Keyword
+        Modifier
+        Operator
+    Macro
+    Type
+    Query (SQL)
+    Definition?
+        Error
+        Exception
+        Event
+    Binding
+        Parameter
+        Attribute
+        ClassAttribute
+        Field
+        Option (Command)
+        Setting
+        Shortcut
+    Function
+        Builtin
+        Delegate?
+        Procedure
+        Subroutine
+        Method
+            Constructor
+            Destructor
+            Accessor
+                Getter
+                Setter
+        ClassMethod
+    Command
+Structure
+    Package (Logical)
+        Section
+        Library
+        Framework
+        Component
+        Extension
+        Plugin
+        Provider
+        Service
+        Test
+    Namespace
+        Module
+    Struct
+    Union
+    Record
+    Class
+        Mixin
+    Interface
+        Protocol
+    Enum
+    Context
+Value
+    Element
+    Environment
+    Resource
+    Statement
+    Style
+    Literal
+        String
+        Number
+            Integer
+            Floating
+        Collection
+            Array
+            Tuple
+            Map
+            Set
+    Reference
+    Object
+        Instance
+Meta
+    Annotation
+    Abstract
+    Filter
+    Tag
+    Hook
+    Category
+Physical
+    File
+"""
+
+
 # NOTE: This is from <https://kapeli.com/docsets>
 class SymbolType(Enum):
     Annotation = "Ann"
