@@ -18,3 +18,5 @@ docSet.toc is a plist file.
 
 
 Postgres docset: https://github.com/drbraden/pgdash/tree/master/postgresql.docset
+
+Kapeli: https://kapeli.com/docsets
