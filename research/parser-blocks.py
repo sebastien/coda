@@ -9,6 +9,19 @@ import re
 
 T = TypeVar("T")
 
+EXAMPLE = """\
+# --
+# BLOCK:A.0
+# BLOCK:A.1
+# BLOCK:A.2
+CODE
+# COMMENT
+# COMMENT
+CODE
+# --
+# BLOCK:B.0
+CODE
+# COMMENT"""
 
 CODA_START = re.compile(r"^(?P<space>[ \t]*)#[ \t]?--$")
 CODA_COMMENT = re.compile(r"^(?P<space>[ \t]*)#(?P<content>.*)$")
@@ -75,11 +88,7 @@ if __name__ == "__main__":
     example = "tests/example-format.txt"
     print(f"=== TEST Parsing example: {example}")
 
-    for atom in Blocks(
-        BlockLines(
-            Lines((Path(__file__).absolute().parent.parent / example).read_text())
-        )
-    ):
+    for atom in Blocks(BlockLines(Lines(EXAMPLE))):
         print(atom)
 
     print("--- EOK")

@@ -1,7 +1,6 @@
 from typing import Iterator, Optional, NamedTuple
 from dataclasses import dataclass
 from html import escape
-import texto
 import re
 
 # --
@@ -116,7 +115,7 @@ class BlockFormatter:
                 case "text":
                     yield f"<em class={block.type} style='color:blue;'>"
                     text = "\n".join(_.strip().lstrip("# ") for _ in block.lines[1:])
-                    yield texto.render(texto.parse(text))
+                    yield text
                     yield "</em>"
                 case _:
                     yield f"<pre class={block.type}>"
