@@ -11,10 +11,14 @@ PYTEST=$(PYTHON)
 SOURCES_PY=$(wildcard src/py/*/*.py src/py/*/*/*.py )
 TREESITTER_LANGUAGES=python javascript
 
+# Commands
+BANDIT=python -m bandit
+PYFLAKES=python -m pyflakes
+MYPY=python -m mypy
+MYPYC=mypyc
+
 cmd-check=if ! $$(which $1 &> /dev/null ); then echo "ERR Could not find command $1"; exit 1; fi; $1
 
-MYPY=mypy
-MYPYC=mypyc
 
 .PHONY: prep
 prep: $(PREP_ALL)
@@ -53,11 +57,11 @@ check: check-bandit check-flakes check-strict
 
 .PHONY: check-bandit
 check-bandit: $(PREP_ALL)
-	@$(call cmd-check,bandit) -r -s B101 src/py/coda
+	@$(BANDIT) -r -s B101 src/py/coda
 
 .PHONY: check-flakes
 check-flakes: $(PREP_ALL)
-	@$(call cmd-check,pyflakes) $(SOURCES_PY)
+	@$(PYFLAKES) $(SOURCES_PY)
 
 .PHONY: check-mypyc
 check-mypyc: $(PREP_ALL)
