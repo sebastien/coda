@@ -15,6 +15,11 @@ class Fragment(NamedTuple):
     column: int
     text: str | None = None
 
+    def read(self) -> str:
+        with open(self.path, "rt") as f:
+            f.seek(self.offset)
+            return f.read(self.length)
+
 
 # Attributes
 """
