@@ -1,16 +1,24 @@
-TREESITTER_LANGUAGES=python javascript
 DEPS_GIT:=$(foreach repo,$(TREESITTER_LANGUAGES),.deps/src/tree-sitter-$(repo))
 SOURCES_PY:=$(wildcard src/py/*/*.py  src/py/*/*/*.py src/py/*/*/*/*.py)
 PRODUCT_SO:=$(SOURCES_PY:src/py/%.py=.build/lib/py/%.so)
 PRODUCT_ALL:=$(PRODUCT_SO)
 
+REQUIRE_PY=pyflakes bandit mypy
+PREP_ALL=$(REQUIRE_PY:%=build/require-py-%.task)
+
 PYTHON=python
 PYTEST=$(PYTHON)
 SOURCES_PY=$(wildcard src/py/*/*.py src/py/*/*/*.py )
+TREESITTER_LANGUAGES=python javascript
+
 cmd-check=if ! $$(which $1 &> /dev/null ); then echo "ERR Could not find command $1"; exit 1; fi; $1
 
 MYPY=mypy
 MYPYC=mypyc
+
+.PHONY: prep
+prep: $(PREP_ALL)
+	@
 
 .PHONY: run
 run:
@@ -34,7 +42,7 @@ uninstall:
 	fi
 
 .PHONY: test
-test:
+test: $(PREP_ALL)
 	@if ! $(PYTEST) ./tests/harness.py ./tests/*.*; then
 		echo "!!! ERR Tests failed"
 		exit 1
@@ -44,19 +52,19 @@ test:
 check: check-bandit check-flakes check-strict
 
 .PHONY: check-bandit
-check-bandit:
+check-bandit: $(PREP_ALL)
 	@$(call cmd-check,bandit) -r -s B101 src/py/coda
 
 .PHONY: check-flakes
-check-flakes:
+check-flakes: $(PREP_ALL)
 	@$(call cmd-check,pyflakes) $(SOURCES_PY)
 
 .PHONY: check-mypyc
-check-mypyc:
+check-mypyc: $(PREP_ALL)
 	@$(call cmd-check,mypyc)  $(SOURCES_PY)
 
 .PHONY: check-strict
-check-strict:
+check-strict: $(PREP_ALL)
 	@
 	count_ok=0
 	count_err=0
@@ -83,14 +91,23 @@ check-strict:
 
 
 # FROM: https://github.com/tree-sitter/py-tree-sitter
-.deps/src/tree-sitter-%:
+deps/src/tree-sitter-%:
 	@mkdir -p "$(dir $@)"
 	git clone https://github.com/tree-sitter/tree-sitter-$* $@
+
+build/require-py-%.task:
+	@
+	if $(PYTHON) -mpip install --user --upgrade '$*'; then
+		mkdir -p "$(dir $@)"
+		touch "$@"
+	fi
 
 # .build/lib/py/%.so: src/py/%.py
 # 	@mkdir -p "$(notdir $@)"
 # 	mypyc $@
 
+print-%:
+	$(info $*=$($*))
 
 
 .ONESHELL:
