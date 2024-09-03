@@ -1,5 +1,6 @@
 from typing import NamedTuple
 from enum import Enum
+import os
 
 
 # --
@@ -8,14 +9,19 @@ from enum import Enum
 class Fragment(NamedTuple):
     """Defines an offset/length within a given text file."""
 
-    path: str
     offset: int
     length: int
     line: int
     column: int
     text: str | None = None
+    path: str | None = None
 
-    def read(self) -> str:
+    def extract(self, text: str) -> str:
+        return text[self.offset : self.offset + self.length]
+
+    def read(self) -> str | None:
+        if not self.path or not os.path.exists(self.path):
+            return self.text
         with open(self.path, "rt") as f:
             f.seek(self.offset)
             return f.read(self.length)

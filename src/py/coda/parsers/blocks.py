@@ -1,4 +1,4 @@
-from typing import Iterator, NamedTuple
+from typing import Iterable, Iterator, NamedTuple
 import re
 from ..model import Fragment
 
@@ -7,73 +7,83 @@ RE_CODA_START = re.compile(r"^(?P<space>[ \t]*)#[ \t]?--+([ \t]*(?P<meta>.*))?$"
 RE_CODA_COMMENT = re.compile(r"^(?P<space>[ \t]*)#(?P<content>.*)$")
 
 
-class TextLine(NamedTuple):
-    path: str
+class Block(NamedTuple):
+    fragment: Fragment
+
+
+class Line(NamedTuple):
+    number: int
     offset: int
-    line: int
     text: str
+    path: str | None = None
+
+
+class TextLine(NamedTuple):
+    line: Line
 
 
 class CodaLine(NamedTuple):
-    path: str
-    offset: int
-    line: int
-    text: str
+    line: Line
     meta: str | None = None
 
 
-Line = CodaLine | TextLine
-
-
-class Block(NamedTuple):
-    fragment: Fragment
+BlockLine = CodaLine | TextLine
 
 
 class BlockParser:
 
     @staticmethod
-    def Lines(lines: Iterator[str], path: str) -> Iterator[Line]:
-        i: int = 0
+    def Lines(
+        lines: Iterable[str], *, path: str | None = None, eol: bool = True
+    ) -> Iterator[Line]:
         o: int = 0
+        for i, line in enumerate(lines):
+            if not eol:
+                line += "\n"
+            yield Line(i, o, line, path)
+            o += len(line)
+
+    @staticmethod
+    def BlockLines(lines: Iterator[Line]) -> Iterator[BlockLine]:
         while line := next(lines, None):
             if line is None:
                 break
-            if match := RE_CODA_START.match(line):
+            if match := RE_CODA_START.match(line.text):
                 space = match.group("space")
-                yield CodaLine(path, o, i, line, match.group("meta"))
+                yield CodaLine(line, match.group("meta"))
                 while (
                     (line := next(lines, None))
-                    and (match := RE_CODA_COMMENT.match(line))
+                    and (match := RE_CODA_COMMENT.match(line.text))
                     and match.group("space") == space
                 ):
-                    yield CodaLine(path, o, i, line)
+                    yield CodaLine(line)
                 else:
                     if line is not None:
-                        yield TextLine(path, o, i, line)
+                        yield TextLine(line)
             else:
-                yield TextLine(path, o, i, line)
-            i += 1
-            o += len(line) if line is not None else 0
+                yield TextLine(line)
 
     @staticmethod
-    def Blocks(lines: Iterator[Line]) -> Iterator[Block]:
-        first: Line | None = None
-        last: Line | None = None
-        path: str | None = None
+    def Blocks(lines: Iterator[BlockLine]) -> Iterator[Block]:
+        first: BlockLine | None = None
+        last: BlockLine | None = None
         # Assumptions:
         # - lines are in a sequential order
         # - all lines from a file come together in a consecutive way
         for line in lines:
             if last and (
-                not isinstance(last, first.__class__) or not last.path == line.path
+                not isinstance(line, first.__class__)
+                or not line.line.path == last.line.path
             ):
                 if first and last:
                     yield Block(
                         Fragment(
-                            path=first.path,
-                            offset=first.offset,
-                            length=last.offset + len(last.text) - first.offset,
-                            line=first.line,
+                            path=first.line.path,
+                            offset=first.line.offset,
+                            length=last.line.offset
+                            + len(last.line.text)
+                            - first.line.offset,
+                            line=first.line.number,
                             column=0,
                         ),
                         # TODO: Meta
@@ -87,10 +97,10 @@ class BlockParser:
         if first and last:
             yield Block(
                 Fragment(
-                    path=first.path,
-                    offset=first.offset,
-                    length=last.offset - first.offset + len(last.text),
-                    line=first.line,
+                    path=first.line.path,
+                    offset=first.line.offset,
+                    length=last.line.offset - first.line.offset + len(last.line.text),
+                    line=first.line.number,
                     column=0,
                 ),
                 # TODO: Meta
@@ -105,10 +115,10 @@ if __name__ == "__main__":
         i = 0
         with open(path) as f:
             for b in BlockParser.Blocks(
-                BlockParser.Lines((_ for _ in f.readlines()), path=path)
+                BlockParser.BlockLines(BlockParser.Lines(f.readlines(), path=path))
             ):
                 print("<<<")
-                for line in b.fragment.read().split("\n"):
+                for line in (b.fragment.read() or "").split("\n"):
                     print(i, line)
                     i += 1
 
