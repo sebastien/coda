@@ -1,6 +1,6 @@
-from typing import NamedTuple
+from typing import NamedTuple, Iterator
+from pathlib import Path
 from enum import Enum
-import os
 
 
 # --
@@ -16,13 +16,53 @@ class Fragment(NamedTuple):
     text: str | None = None
     path: str | None = None
 
+    @staticmethod
+    def Find(
+        path: Path, pattern: str, *, base: Path | None = None
+    ) -> Iterator["Fragment"]:
+        """Finds all the occurrences of the given pattern (text) at the given
+        path, and returns fragments."""
+        pattern = pattern.replace("\\\\/", "/")
+        offset: int = 0
+        rel_path = path.relative_to(base) if base else path
+        if pattern.startswith("/^") and pattern.endswith('$/;"'):
+            pat = pattern[2:-4]
+            with open(path, "rt") as f:
+                for i, line in enumerate(f.readlines()):
+                    if line.strip("\n") == pat:
+                        yield Fragment(
+                            path=str(rel_path),
+                            offset=offset,
+                            length=len(pat),
+                            line=i,
+                            column=0,
+                            text=pat,
+                        )
+                    offset += len(line)
+        else:
+            with open(path, "rt") as f:
+                for i, line in enumerate(f.readlines()):
+                    j = line.find(pattern)
+                    if j >= 0:
+                        yield Fragment(
+                            path=str(rel_path),
+                            offset=offset + j,
+                            length=len(pattern),
+                            line=i,
+                            column=j,
+                            text=pattern,
+                        )
+                    offset += len(line)
+
     def extract(self, text: str) -> str:
+        """Extracts the fragment from the given text."""
         return text[self.offset : self.offset + self.length]
 
-    def read(self) -> str | None:
-        if not self.path or not os.path.exists(self.path):
+    def read(self, base: Path = Path()) -> str | None:
+        """Reads the fragment from the given path."""
+        if not self.path or not (path := base / self.path).exists():
             return self.text
-        with open(self.path, "rt") as f:
+        with open(path, "rt") as f:
             f.seek(self.offset)
             return f.read(self.length)
 
