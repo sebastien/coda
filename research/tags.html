@@ -65,7 +65,13 @@
 				))
 		}
 
+<<<<<<< HEAD
 		const tags = (await fetch("tags.json").then(_ => _.json())).slice(0, 2)
+||||||| 4a1a03c
+		const tags = await fetch("tags.json").then(_ => _.json())
+=======
+		const tags = await fetch("tag-2.json").then(_ => _.json())
+>>>>>>> 4af8a178a86a6e958551a8e8905daef6f8348d24
 		const groups = grouped(tags, "type");
 		const items = keys(groups).map(_ => ({label: _}))
 		render(Panels, {panels: [items, tags], selection: "KAPOUET"}, document.getElementById("Items"))
