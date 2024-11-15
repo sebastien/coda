@@ -1,152 +1,245 @@
-from typing import Optional, Any, NamedTuple
-from dataclasses import dataclass, field, asdict
+from typing import NamedTuple, Iterator
+from pathlib import Path
 from enum import Enum
 
+
 # --
-# # Data Model
-#
-# Coda primarily manages blocks of texts that contain symbols. Symbols
-# denote important elements, such as function definitions, classes or types
-# for code, or terms, links and definitions for code.
-#
-# Symbols form a tree of names.
+# Fragments are the main wait to define the position (and span)
+# of something within the source code.
+class Fragment(NamedTuple):
+    """Defines an offset/length within a given text file."""
+
+    offset: int
+    length: int
+    line: int
+    column: int
+    text: str | None = None
+    path: str | None = None
+
+    @staticmethod
+    def Find(
+        path: Path, pattern: str, *, base: Path | None = None
+    ) -> Iterator["Fragment"]:
+        """Finds all the occurrences of the given pattern (text) at the given
+        path, and returns fragments."""
+        pattern = pattern.replace("\\\\/", "/")
+        offset: int = 0
+        rel_path = path.relative_to(base) if base else path
+        if pattern.startswith("/^") and pattern.endswith('$/;"'):
+            pat = pattern[2:-4]
+            with open(path, "rt") as f:
+                for i, line in enumerate(f.readlines()):
+                    if line.strip("\n") == pat:
+                        yield Fragment(
+                            path=str(rel_path),
+                            offset=offset,
+                            length=len(pat),
+                            line=i,
+                            column=0,
+                            text=pat,
+                        )
+                    offset += len(line)
+        else:
+            with open(path, "rt") as f:
+                for i, line in enumerate(f.readlines()):
+                    j = line.find(pattern)
+                    if j >= 0:
+                        yield Fragment(
+                            path=str(rel_path),
+                            offset=offset + j,
+                            length=len(pattern),
+                            line=i,
+                            column=j,
+                            text=pattern,
+                        )
+                    offset += len(line)
+
+    def extract(self, text: str) -> str:
+        """Extracts the fragment from the given text."""
+        return text[self.offset : self.offset + self.length]
+
+    def read(self, base: Path = Path()) -> str | None:
+        """Reads the fragment from the given path."""
+        if not self.path or not (path := base / self.path).exists():
+            return self.text
+        with open(path, "rt") as f:
+            f.seek(self.offset)
+            return f.read(self.length)
 
 
-# Alternative
-# class Position(NamedTuple):
-#     offset: int
-#     line: Optional[int] = None
-#     column: Optional[int] = None
+# Attributes
+"""
+Constant
+"""
+
+# Types
+
+# TODO: Semantically we should have two things:
+# - Reference
+# - Definition
 #
+# and then Symbols which are things that have name. Values are things with
+# no name, that can be bound to a name (symbol).
 #
-# class Range(NamedTuple):
-#     start: Position
-#     end: Position
-#
-#
-# class Location(NamedTuple):
-#     path: str
-#     scheme: str = "file"
-#
-#
-# class Fragment(NamedTuple):
-#     text: str
-#     range: Range
-#     origin: Optional[Location] = None
-#
-#
-# def fragment(
-#     text: str,
-#     start: int,
-#     end: int,
-#     startLine: Optional[int] = None,
-#     startColumn: Optional[int] = None,
-#     endLine: Optional[int] = None,
-#     endColumn: Optional[int] = None,
-# ) -> Fragment:
-#     return Fragment(
-#         text,
-#         Range(
-#             Position(start, startLine, startColumn),
-#             Position(end, endLine, endColumn),
-#         ),
-#     )
+# Some things are logical, ie. they have a label (human readable description),
+# but not a name.
+"""
+Symbol
+    Variable
+        Global
+        Local
+    Keyword
+        Modifier
+        Operator
+    Macro
+    Type
+    Query (SQL)
+    Definition?
+        Error
+        Exception
+        Event
+    Binding
+        Parameter
+        Attribute
+        ClassAttribute
+        Field
+        Option (Command)
+        Setting
+        Shortcut
+    Function
+        Builtin
+        Delegate?
+        Procedure
+        Subroutine
+        Method
+            Constructor
+            Destructor
+            Accessor
+                Getter
+                Setter
+        ClassMethod
+    Command
+Structure
+    Package (Logical)
+        Section
+        Library
+        Framework
+        Component
+        Extension
+        Plugin
+        Provider
+        Service
+        Test
+    Namespace
+        Module
+    Struct
+    Union
+    Record
+    Class
+        Mixin
+    Interface
+        Protocol
+    Enum
+    Context
+Value
+    Element
+    Environment
+    Resource
+    Statement
+    Style
+    Literal
+        String
+        Number
+            Integer
+            Floating
+        Collection
+            Array
+            Tuple
+            Map
+            Set
+    Reference
+    Object
+        Instance
+Meta
+    Annotation
+    Abstract
+    Filter
+    Tag
+    Hook
+    Category
+Physical
+    File
+"""
 
 
+# NOTE: This is from <https://kapeli.com/docsets>
 class SymbolType(Enum):
-    # These are the different parts of the program
-    Program = "program"
-    Module = "module"
-    Function = "function"
-    Class = "object"
-    Slot = "slot"
-    Object = "object"
-    Value = "value"
+    Annotation = "Ann"
+    Attribute = "Atr"
+    Binding = "Bnd"
+    Builtin = "Blt"
+    Callback = "Cal"
+    Category = "Cat"
+    Class = "Cls"
+    Command = "Cmd"
+    Component = "Cmp"
+    Constant = "Cst"
+    Constructor = "Ctor"
+    Delegate = "Del"
+    Directive = "Dir"
+    Element = "Ele"
+    Enum = "Enm"
+    Environment = "Env"
+    Error = "Err"
+    Event = "Evt"
+    Exception = "Exc"
+    Extension = "Ext"
+    Field = "Fld"
+    File = "File"
+    Filter = "Flt"
+    Framework = "Frm"
+    Function = "Fun"
+    Global = "Glb"
+    Hook = "Hck"
+    Instance = "Ins"
+    Interface = "Int"
+    Keyword = "Kwd"
+    Library = "Lib"
+    Literal = "Ltl"
+    Macro = "Mcr"
+    Method = "Mtd"
+    Mixin = "Mxn"
+    Modifier = "Mod"
+    Module = "Mdl"
+    Namespace = "Nsp"
+    Object = "Obj"
+    Operator = "Opr"
+    Option = "Opt"
+    Package = "Pkg"
+    Parameter = "Prm"
+    Plugin = "Pgn"
+    Procedure = "Prc"
+    Property = "Prp"
+    Protocol = "Ptl"
+    Provider = "Prv"
+    Query = "Qry"
+    Record = "Rcd"
+    Resource = "Rsc"
+    Section = "Sec"
+    Service = "Svc"
+    Setting = "Stg"
+    Shortcut = "Sct"
+    Statement = "Stm"
+    Struct = "Str"
+    Style = "Sty"
+    Subroutine = "Sub"
+    Tag = "Tag"
+    Test = "Tst"
+    Trait = "Trt"
+    Type = "Typ"
+    Union = "Unn"
+    Value = "Val"
+    Variable = "Var"
 
 
-# TODO: Not sure if we should have a scope type
-# class ScopeType(Enum):
-#     # This is to denote the declaration and definition
-#     Declaration = "declaration"
-#     Definition = "definition"
-
-
-# --
-# Fragments are use to mark subsets of the source text.
-class Fragment:
-    @property
-    def text(self) -> str:
-        raise NotImplementedError
-
-    def __repr__(self) -> str:
-        return f"<{self.__class__.__name__}:{repr(self.text)}>"
-
-    def __str__(self) -> str:
-        return self.text
-
-
-class LiteralFragment(Fragment):
-    def __init__(self, text: str):
-        super().__init__()
-        self.value = text
-
-    @property
-    def text(self) -> str:
-        return self.value
-
-
-class StringFragment(Fragment):
-    def __init__(self, text: str, start: int = 0, end: Optional[int] = None):
-        self.source: str = text
-        self.start = start
-        self.end = end
-
-    @property
-    def text(self) -> str:
-        return self.source[self.start : self.end]
-
-
-# --
-# Blocks denote regions of the source text, typically comments, classes
-# definitions, etc.
-@dataclass
-class Block:
-    type: str
-    fragment: Fragment
-
-    @property
-    def text(self) -> str:
-        return self.fragment.text
-
-
-# --
-# Symbols are extracting by parsing, for instance using TreeSitter to query
-# the text.
-@dataclass
-class Symbol:
-    """Represents a named symbol"""
-
-    name: str
-    type: SymbolType
-    # Symbols are connected indirectly by reference
-    parent: Optional[str] = None
-    fragment: Optional[Fragment] = None
-    slots: dict[str, str] = field(default_factory=dict)
-    relations: dict[str, str] = field(default_factory=dict)
-
-    @property
-    def qualname(self):
-        return self.name if not self.parent else f"{self.parent}.{self.name}"
-
-    def asDict(self) -> dict:
-        res = asdict(self)
-        res["qualname"] = self.qualname
-        return res
-
-
-@dataclass
-class Scope(Symbol):
-    children: list[Symbol] = field(default_factory=list)
-
-
-## EOF
+# EOF

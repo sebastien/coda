@@ -1,7 +1,5 @@
 appenv_declare $(basename $APPENV_DIR)
-appenv_prepend PYTHONPATH $APPENV_DIR/src/py
-appenv_prepend MYPYPATH $APPENV_DIR/src/py
-appenv_prepend PYTHONPATH $APPENV_DIR/research
-appenv_prepend PYTHONPATH $APPENV_DIR/deps/texto/src/py
+appenv_prepend PYTHONPATH $APPENV_DIR/src/py:$APPENV_DIR
+appenv_prepend MYPYPATH $APPENV_DIR/src/py:$APPENV_DIR
 appenv_prepend PATH $APPENV_DIR/bin
 # EOF
