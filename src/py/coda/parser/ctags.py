@@ -11,6 +11,7 @@ from ..utils.export import asPrimitive
 class TagSymbolType(Enum):
     ImportedInternal = "I"
     ImportedExternal = "Y"
+    Const = "C"
     Class = "c"
     Function = "f"
     Module = "i"
@@ -108,7 +109,7 @@ if __name__ == "__main__":
 
     args = sys.argv[1:]
     if not args:
-        paths = ["*.py", "src/**/*.py"]
+        paths = ["*.*", "src/**/*.*"]
         for _ in Tags.Make(*paths):
             print(_)
     else:

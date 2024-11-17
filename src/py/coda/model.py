@@ -22,7 +22,7 @@ class Fragment(NamedTuple):
     ) -> Iterator["Fragment"]:
         """Finds all the occurrences of the given pattern (text) at the given
         path, and returns fragments."""
-        pattern = pattern.replace("\\\\/", "/")
+        pattern = pattern.replace("\\/", "/").replace("\\\\","\\")
         offset: int = 0
         rel_path = path.relative_to(base) if base else path
         if pattern.startswith("/^") and pattern.endswith('$/;"'):
@@ -30,8 +30,7 @@ class Fragment(NamedTuple):
             with open(path, "rt") as f:
                 for i, line in enumerate(f.readlines()):
                     if line.strip("\n") == pat:
-                        yield Fragment(
-                            path=str(rel_path),
+                        yield Fragment( path=str(rel_path),
                             offset=offset,
                             length=len(pat),
                             line=i,
